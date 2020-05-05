@@ -1,0 +1,56 @@
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: bind-dnssec-config
+spec:
+  selector:
+    matchLabels:
+      app: "bind_dnssec_config"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: bind_dnssec_config
+    spec:
+      containers:
+        - name: nginx
+          image: farberg/bind-dnssec-config:latest
+          ports:
+            - containerPort: 7777
+            - containerPort: 53
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 7777
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 7777
+            initialDelaySeconds: 5
+            periodSeconds: 30
+#          resources:
+#            limits:
+#              cpu: ".1"
+#              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bind-dnssec-config-service
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.dhbw.e.farberg.de
+spec:
+  selector:
+    app: bind-dnssec-config
+  ports:
+    # cf. https://github.com/kubernetes/kubernetes/pull/64471 (Allow for mixed UDP/TCP ports on LoadBalancer Services)
+    #    - protocol: TCP
+    #      port: 53
+    #      targetPort: 53
+    - protocol: UDP
+      port: 53
+      targetPort: 53
+  type: LoadBalancer

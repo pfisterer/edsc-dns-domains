@@ -1,0 +1,56 @@
+---
+# Deprecated in v1.16 in favor of apiextensions.k8s.io/v1
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  # name must match the spec fields below, and be in the form: <plural>.<group>
+  name: dnsseczones.dnsseczone.farberg.de
+spec:
+  # group name to use for REST API: /apis/<group>/<version>
+  group: dnsseczone.farberg.de
+  # list of versions supported by this CustomResourceDefinition
+  versions:
+    - name: v1
+      # Each version can be enabled/disabled by Served flag.
+      served: true
+      # One and only one version must be marked as the storage version.
+      storage: true
+  # either Namespaced or Cluster
+  scope: Namespaced
+  names:
+    # plural name to be used in the URL: /apis/<group>/<version>/<plural>
+    plural: dnsseczones
+    # singular name to be used as an alias on the CLI and for display
+    singular: dnsseczone
+    # kind is normally the CamelCased singular type. Your resource manifests use this.
+    kind: DnssecZone
+    # shortNames allow shorter string to match your resource on the CLI
+    shortNames:
+      - dz
+  preserveUnknownFields: true
+  validation:
+    openAPIV3Schema:
+      type: object
+      properties:
+        spec:
+          type: object
+          properties:
+            domainName:
+              type: string
+            adminContact:
+              type: string
+            ttlSeconds:
+              type: integer
+            refreshSeconds:
+              type: integer
+            retrySeconds:
+              type: integer
+            expireSeconds:
+              type: integer
+            minimumSeconds:
+              type: integer
+            associatedPrincipals:
+              type: array
+              items:
+                type: string
+# status should contain dnssecAlg, dnssecKey, dnsSerial

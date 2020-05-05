@@ -1,0 +1,15 @@
+apiVersion: skaffold/v1
+kind: Config
+
+metadata:
+  name: bind-dnssec-controller
+
+build:
+  artifacts:
+    - image: farberg/bind-dnssec-config
+      context: .
+
+deploy:
+  kubectl:
+    manifests:
+      - k8s-deployment.yaml
