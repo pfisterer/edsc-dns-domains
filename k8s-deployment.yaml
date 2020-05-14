@@ -14,22 +14,25 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: farberg/bind-dnssec-config:latest
+          image: farberg/bind-dnssec-config
+          args:
+            - "--verbose"
+          # - "--dryrun"
           ports:
             - containerPort: 7777
             - containerPort: 53
-          livenessProbe:
-            httpGet:
-              path: /health/liveness
-              port: 7777
-            initialDelaySeconds: 5
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health/readiness
-              port: 7777
-            initialDelaySeconds: 5
-            periodSeconds: 30
+#          livenessProbe:
+#            httpGet:
+#              path: /health/liveness
+#              port: 7777
+#            initialDelaySeconds: 5
+#            periodSeconds: 30
+#          readinessProbe:
+#            httpGet:
+#              path: /health/readiness
+#              port: 7777
+#            initialDelaySeconds: 5
+#            periodSeconds: 30
 #          resources:
 #            limits:
 #              cpu: ".1"
@@ -44,7 +47,7 @@ metadata:
     external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.dhbw.e.farberg.de
 spec:
   selector:
-    app: bind-dnssec-config
+    app: bind_dnssec_config
   ports:
     # cf. https://github.com/kubernetes/kubernetes/pull/64471 (Allow for mixed UDP/TCP ports on LoadBalancer Services)
     #    - protocol: TCP
