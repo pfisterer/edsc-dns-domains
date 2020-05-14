@@ -1,4 +1,3 @@
-const { execSync } = require('child_process');
 const commandLineArgs = require('command-line-args')
 const commandLineUsage = require('command-line-usage')
 const path = require('path')
@@ -16,19 +15,6 @@ const BindProcessRunner = require("./bind-process-runner");
 const dummyCrdGen = require('./dummy-crd-gen')
 
 // ------------------------------------------------
-// Dummy private key for dry run
-// ------------------------------------------------
-
-const dummyDnssecKeygenPrivateKey = `Private-key-format: v1.3
-Algorithm: 165 (HMAC_SHA512)
-Key: OUEvJ1casfadsfsdafS2o/N8islfjlsdkjflskdjfF1++rT8asfsadfk6dOHt5XbwtQ==
-Bits: AAA=
-Created: 20191115141045
-Publish: 20191115141045
-Activate: 20191115141045
-`;
-
-// ------------------------------------------------
 // Parse command line options
 // ------------------------------------------------
 
@@ -38,7 +24,7 @@ const cmdLineOpts = [
   { name: 'configdir', type: String, description: "The directory where to write the configuration to" },
   { name: 'crddef', type: String, description: "Path to custom resource defs(CRDs) to use" },
   { name: 'namespace', type: String, description: "Namespace to use" },
-  { name: 'dnssseckeygen', type: String, description: "Path to the dnssec-keygen binary" },
+  { name: 'rndcconfgenpath', type: String, description: "Path to the rndc-confgen binary" },
   { name: 'bindbinary', type: String, description: "Path to named binary" },
   { name: 'bindextraargs', type: String, description: "Extra args to pass to the bind binary" },
   { name: 'healthendpoint', type: Number, description: "Start a k8s health endpoint on this port" },
@@ -59,12 +45,15 @@ const usage = commandLineUsage([
   }*/
 ])
 
-const options = commandLineArgs(cmdLineOpts)
-options.crddef = options.crddef || path.join(__dirname, "./crd-defs");
-options.configdir = options.configdir || "/tmp";
-options.dnssseckeygen = options.dnssseckeygen || "dnssec-keygen";
-options.bindbinary = options.bindbinary || "named";
-options.namespace = options.namespace || "default";
+const options = Object.assign({}, {
+  crddef: path.join(__dirname, "./crd-defs"),
+  configdir: "/tmp",
+  rndcconfgenpath: "/usr/sbin/rndc-confgen",
+  bindbinary: "/usr/sbin/named",
+  namespace: "default",
+  healthendpoint: 7777
+}, commandLineArgs(cmdLineOpts));
+
 
 // ------------------------------------------------
 // Set global log level options
@@ -79,18 +68,25 @@ function getLogger(name) {
 }
 
 const logger = getLogger("index")
-logger.debug("Command line options parsed: ", options)
 
 function startHealth(port) {
+  logger.info(`Starting health endpoint on port ${port}`)
+
   const app = Express();
   app.get('/', (req, res) => {
-    res.status(200).send('<html><body><a href="/health/liveness">liveness</a><br><a href="/health/readiness">readiness</a></body></html>');
+    res.status(200).send(`<html>
+      <body>
+        <a href="/health/liveness">liveness</a><br>
+        <a href="/health/readiness">readiness</a>
+      </body>
+    </html>`);
   });
 
   app.get('/health/liveness', (req, res) => {
     logger.debug("Health check");
     res.status(200).send("OK");
   });
+
   app.get('/health/readiness', (req, res) => {
     logger.debug("Readiness check");
     if (bindProcessRunner.ready())
@@ -98,6 +94,7 @@ function startHealth(port) {
     else
       res.status(500).send("Internal Server Error");
   });
+
   app.listen(port)
 }
 
@@ -107,6 +104,7 @@ function loadYaml(pathname, filename) {
 }
 
 async function main(options) {
+  logger.log("Starting main with options", options)
   const client = new Client(/*{ config: config.fromKubeconfig(), version: '1.13' }*/)
 
   // Create watcher on k8s resources
@@ -114,22 +112,13 @@ async function main(options) {
   const dnsSecZoneCrdWatcher = new CrdWatcher(client, dnsSecZoneCrd, options.namespace, getLogger("dnssec-zone-crd"))
   await dnsSecZoneCrdWatcher.start();
 
-  // Create keygen command
-  let keyGenCmd = options.dryrun ? (args, workingDir) => {
-    let filename = workingDir.name + "/dry-run-demo.private"
-    logger.debug(`Dry-run: NOT running '${options.dnssseckeygen} ${args}' in directory ${workingDir.name}`)
-    fs.writeFileSync(filename, dummyDnssecKeygenPrivateKey);
-    return filename;
-
-  } : (args, workingDir) => {
-    let cmd = options.dnssseckeygen + " " + args
-    logger.debug(`Running command ${cmd} in directory ${workingDir.name}`)
-    return workingDir.name + "/" + execSync(cmd, { cwd: workingDir.name }) + ".private";
-
-  };
-
   // Create bind config generator
-  let bindConfigGen = new BindConfigGen(options.configdir, keyGenCmd, getLogger("BindConfigGen"))
+  let bindConfigGen = new BindConfigGen({
+    configdir: options.configdir,
+    dryrun: options.dryrun,
+    logger: getLogger("BindConfigGen")
+  })
+
   let bindProcessRunner = new BindProcessRunner({
     bindbinary: options.bindbinary,
     configdir: options.configdir,

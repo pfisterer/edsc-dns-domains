@@ -1,11 +1,12 @@
-const EventEmitter = require('events');
+const EventEmitter = require('events')
+const clonedeep = require('lodash').cloneDeep
 
 module.exports = class CrdWatcher extends EventEmitter {
 
-	constructor(client, crd, namespace, logger) {
+	constructor(client, crdDef, namespace, logger) {
 		super()
 		this.client = client;
-		this.crd = crd;
+		this.crdDef = crdDef;
 		this.namespace = namespace;
 		this.logger = logger;
 	}
@@ -21,7 +22,7 @@ module.exports = class CrdWatcher extends EventEmitter {
 				.apis['apiextensions.k8s.io'].v1beta1
 				//.namespaces(this.namespace)
 				.customresourcedefinitions
-				.post({ body: this.crd })
+				.post({ body: this.crdDef })
 
 		} catch (err) {
 			// API returns a 409 Conflict if CRD already exists.
@@ -33,22 +34,23 @@ module.exports = class CrdWatcher extends EventEmitter {
 		}
 
 		// Add endpoints to our client
-		await this.client.addCustomResourceDefinition(this.crd)
+		await this.client.addCustomResourceDefinition(this.crdDef)
 	}
 
-	//TODO: async deleteCrds() { }
+	async deleteCrdDef() {
+		throw "deleteCrdDef: Not implemented"
+	}
 
 	async start() {
 		if (this.stream)
 			this.stop();
 
-		this.crdGroup = this.crd.spec.group;
-		this.pluralName = this.crd.spec.names.plural
+		this.crdGroup = this.crdDef.spec.group;
+		this.pluralName = this.crdDef.spec.names.plural
 
 		await this.ensureCrdsAvailable();
 
 		console.log(`Using CRD with name ${this.crdGroup}`)
-
 
 		this.stream = await this.startStream()
 
@@ -83,20 +85,46 @@ module.exports = class CrdWatcher extends EventEmitter {
 			.apis[this.crdGroup].v1
 			.namespaces(this.namespace)[this.pluralName].get()
 
-		console.log('All: ', all)
+		this.logger.debug('All: ', all)
+	}
+
+	async create(crd) {
+		this.logger.debug("Creating new crd instance: ", crd)
+
+		const newCrd = await this.client
+			.apis[this.crdGroup].v1
+			.namespaces(this.namespace)[this.pluralName]
+			.post({ body: crd })
+
+		this.logger.debug("Created new crd instance: ", newCrd)
+	}
+
+	async remove(crdName) {
+		this.logger.debug("About to delete crd with name", crdName)
+
+		const result = await this.client
+			.apis[this.crdGroup].v1
+			.namespaces(this.namespace)[this.pluralName](crdName)
+			.delete()
+
+		this.logger.debug("Delete result of crd with name: ", result)
+	}
+
+	async replace(oldCrd, newCrd) {
+		await this.remove(oldCrd.metadata.name)
+		await this.create(newCrd)
 	}
 
 	async updateStatus(crd, statusPatch) {
-		const newStatus = Object.assign({}, crd.status || {}, statusPatch);
-		this.logger.debug("Updating status from", crd.status, "to", newStatus, "of object", crd)
-		crd.status = newStatus
+		//Create new object with patched status
+		const newCrd = clonedeep(crd)
+		newCrd.status = Object.assign({}, crd.status || {}, statusPatch);
+		delete newCrd.metadata["resourceVersion"]
 
-		const update = await this.client.apis.apps.v1
-			//.apis[this.crdGroup].v1
-			//.namespaces(this.namespace)//[this.pluralName]
-			.put({ body: crd })
+		this.logger.debug("Updating status from", crd.status, "to", newCrd.status, "of new crd object", newCrd)
+
+		this.replace(crd, newCrd)
 	}
-
 
 	async startStream() {
 		this.logger.debug("Watching event stream")

@@ -11,7 +11,7 @@ module.exports = class BindConfigRunner extends EventEmitter {
 		this.dryRun = options.dryrun || false
 		this.logger = options.logger
 
-		this.defaultArgs = `-g -u named -c '${this.configDir}/named.conf'`
+		this.defaultArgs = ['-g', '-u', 'named', '-c', `${this.configDir}/named.conf`]
 	}
 
 	restart() {
@@ -28,22 +28,25 @@ module.exports = class BindConfigRunner extends EventEmitter {
 		}
 
 		// Spawn a new bind process		
-		let cmd = `'${this.binaryPath}' '${this.defaultArgs}' ${this.extraArgs}`
+		let cmd = `${this.binaryPath}' '${this.defaultArgs}' ${this.extraArgs}`
+		let args = this.defaultArgs.concat(this.extraArgs)
 
-		this.logger.debug("String bind, command: ", cmd);
-		this.bindProcess = spawn(cmd);
+		this.logger.debug("Bind, command ", cmd, "and", args);
+		this.bindProcess = spawn(this.binaryPath, args);
 		this.emit('start')
 
-		this.bindProcess.on('error', function (err) {
+		this.bindProcess.on('error', err => {
+			this.logger.debug(`Error: `, err)
 			this.bindProcess = null
 			this.emit('error', err)
 		})
-		this.bindProcess.on('exit', function (code, signal) {
+
+		this.bindProcess.on('exit', (code, signal) => {
+			this.logger.debug(`Exit: `, code, signal)
 			this.bindProcess = null
 			this.emit('exit', code, signal)
 		})
 	}
-
 
 	ready() {
 		return this.bindProcess || this.dryRun
