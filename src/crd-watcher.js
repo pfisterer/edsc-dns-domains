@@ -19,7 +19,7 @@ module.exports = class CrdWatcher extends EventEmitter {
 		try {
 			this.logger.info("Adding CRD")
 			await this.client
-				.apis['apiextensions.k8s.io'].v1beta1
+				.apis['apiextensions.k8s.io'].v1
 				//.namespaces(this.namespace)
 				.customresourcedefinitions
 				.post({ body: this.crdDef })
@@ -110,20 +110,40 @@ module.exports = class CrdWatcher extends EventEmitter {
 		this.logger.debug("Delete result of crd with name: ", result)
 	}
 
-	async replace(oldCrd, newCrd) {
-		await this.remove(oldCrd.metadata.name)
-		await this.create(newCrd)
-	}
+	// Inspired by https://github.com/godaddy/kubernetes-external-secrets/blob/master/lib/custom-resource-manager.js" and	
+	// https://github.com/godaddy/kubernetes-external-secrets/blob/f26bf2bb14cfc7f6827e53550c8474b89133bc45/lib/poller.js
+	async updateStatus(customResource, statusPatch) {
+		this.logger.debug("Request to update status of ", customResource, " to ", statusPatch)
+		const resourceName = customResource.metadata.name
 
-	async updateStatus(crd, statusPatch) {
-		//Create new object with patched status
-		const newCrd = clonedeep(crd)
-		newCrd.status = Object.assign({}, crd.status || {}, statusPatch);
-		delete newCrd.metadata["resourceVersion"]
+		/*
+		const resourceVersion = customResource.metadata.resourceVersion
+		const body = clonedeep(customResource)
+		body.status = Object.assign(body.status || {}, statusPatch)
+		body.metadata.resourceVersion = resourceVersion
+		console.log(await this.client.apis[this.crdGroup].v1)
+		await this.client.apis[this.crdGroup].v1.put({ body })
+		*/
 
-		this.logger.debug("Updating status from", crd.status, "to", newCrd.status, "of new crd object", newCrd)
+		console.log(this.client.apis[this.crdGroup].v1[this.pluralName])
 
-		this.replace(crd, newCrd)
+		this.client.apis[this.crdGroup].v1[this.pluralName](resourceName).status.put(statusPatch)
+		this.logger.debug("Updated status from", customResource.status, "to", body.status, "of new crd object", body)
+
+		/*
+		this._status = this._kubeClient
+			.apis[this._customResourceManifest.spec.group]
+			.v1.namespaces(this._namespace)[this._customResourceManifest.spec.names.plural](this._name).status
+		await this._status.put({
+			body: {
+				...this._externalSecret,
+				status: {
+					lastSync: `${new Date().toISOString()}`,
+					observedGeneration: this._externalSecret.metadata.generation,
+					status
+				}
+			}
+		})*/
 	}
 
 	async startStream() {

@@ -108,7 +108,7 @@ async function main(options) {
   const client = new Client(/*{ config: config.fromKubeconfig(), version: '1.13' }*/)
 
   // Create watcher on k8s resources
-  const dnsSecZoneCrd = loadYaml(options.crddef, "dnssec-zone-crd.yaml");
+  const dnsSecZoneCrd = loadYaml(options.crddef, "dnssec-zone-crd-v1.yaml");
   const dnsSecZoneCrdWatcher = new CrdWatcher(client, dnsSecZoneCrd, options.namespace, getLogger("dnssec-zone-crd"))
   await dnsSecZoneCrdWatcher.start();
 

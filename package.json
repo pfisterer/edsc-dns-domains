@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile_grammar": "npx nearleyc src/dnssec-bind-key-grammar.ne --out src/dnssec-bind-key-grammar.js",
     "test_grammar": "cat test/dnssec-example.key | npx nearley-test src/dnssec-bind-key-grammar.js",
-    "build": "npm run compile_grammar"
+    "build": "npm run compile_grammar",
+    "dryrun": "nodemon src/index.js -- --verbose --dryrun"
   },
   "author": "",
   "license": "ISC",
