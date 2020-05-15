@@ -16,6 +16,7 @@
     "start": "clear"
   },
   "dependencies": {
+    "@dot-i/k8s-operator": "^1.0.2",
     "command-line-args": "^5.1.1",
     "command-line-usage": "^6.1.0",
     "express": "^4.17.1",
@@ -26,6 +27,7 @@
     "log4js": "^6.2.1",
     "nearley": "^2.19.3",
     "rimraf": "^3.0.2",
-    "tmp": "^0.2.1"
+    "tmp": "^0.2.1",
+    "ws": "^7.3.0"
   }
 }

@@ -7,7 +7,7 @@ module.exports = function generateRandomCrds(options) {
 	let crdGroup = options.crdGroup
 	let interval = options.interval || 5000
 
-	setInterval(async () => {
+	let genFunc = async () => {
 		const name = randomWords(2).join('.')
 		const meta_name = `domain-${name}`
 
@@ -46,8 +46,10 @@ module.exports = function generateRandomCrds(options) {
 			logger.debug(`Done deleting dnssec zone ${name}, meta.name: ${meta_name}, result = `, del)
 
 		}, interval / 2)
+	}
 
-	}, interval)
+	genFunc();
+	setInterval(genFunc, interval)
 
 }
 

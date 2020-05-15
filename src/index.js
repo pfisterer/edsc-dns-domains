@@ -2,17 +2,18 @@ const commandLineArgs = require('command-line-args')
 const commandLineUsage = require('command-line-usage')
 const path = require('path')
 const fs = require('fs')
-const Express = require('express')
 const yaml = require('js-yaml')
 var log4js = require('log4js')
 
-const Client = require('kubernetes-client').Client
+//const Client = require('kubernetes-client').Client
 //const config = require('kubernetes-client/backends/request').config
 
-const CrdWatcher = require('./crd-watcher')
+const DnssecOperator = require('./dnssec-operator')
 const BindConfigGen = require("./bind-config-gen")
 const BindProcessRunner = require("./bind-process-runner");
+const HealthEndpoint = require("./health-endpoint");
 const dummyCrdGen = require('./dummy-crd-gen')
+const GodaddyClient = require('kubernetes-client').Client
 
 // ------------------------------------------------
 // Parse command line options
@@ -67,69 +68,41 @@ function getLogger(name) {
   return log
 }
 
-const logger = getLogger("index")
+// ------------------------------------------------
+// Setup functions
+// ------------------------------------------------
 
-function startHealth(port) {
-  logger.info(`Starting health endpoint on port ${port}`)
-
-  const app = Express();
-  app.get('/', (req, res) => {
-    res.status(200).send(`<html>
-      <body>
-        <a href="/health/liveness">liveness</a><br>
-        <a href="/health/readiness">readiness</a>
-      </body>
-    </html>`);
-  });
-
-  app.get('/health/liveness', (req, res) => {
-    logger.debug("Health check");
-    res.status(200).send("OK");
-  });
-
-  app.get('/health/readiness', (req, res) => {
-    logger.debug("Readiness check");
-    if (bindProcessRunner.ready())
-      res.status(200).send("OK");
-    else
-      res.status(500).send("Internal Server Error");
-  });
-
-  app.listen(port)
+async function startHealthEndpoint(bindProcessRunner, options, logger) {
+  const health = new HealthEndpoint(bindProcessRunner, logger)
+  health.start(options.healthendpoint)
+  return health;
 }
 
-function loadYaml(pathname, filename) {
-  const p = path.join(pathname, filename);
-  return yaml.safeLoad(fs.readFileSync(p, "utf8"))
-}
-
-async function main(options) {
-  logger.log("Starting main with options", options)
-  const client = new Client(/*{ config: config.fromKubeconfig(), version: '1.13' }*/)
-
-  // Create watcher on k8s resources
-  const dnsSecZoneCrd = loadYaml(options.crddef, "dnssec-zone-crd-v1.yaml");
-  const dnsSecZoneCrdWatcher = new CrdWatcher(client, dnsSecZoneCrd, options.namespace, getLogger("dnssec-zone-crd"))
-  await dnsSecZoneCrdWatcher.start();
-
-  // Create bind config generator
-  let bindConfigGen = new BindConfigGen({
+async function startBindConfigGenerator(options, logger) {
+  return new BindConfigGen({
     configdir: options.configdir,
     dryrun: options.dryrun,
-    logger: getLogger("BindConfigGen")
+    logger
   })
+}
 
+async function startBindProcessRunner(options, logger) {
   let bindProcessRunner = new BindProcessRunner({
     bindbinary: options.bindbinary,
     configdir: options.configdir,
     bindextraargs: options.bindextraargs,
     dryrun: options.dryrun,
-    logger: getLogger("BindProcessRunner")
+    logger
   })
 
   bindProcessRunner.restart();
+  return bindProcessRunner
+}
 
-  function addedOrModified(object) {
+async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, logger) {
+
+  function addedOrModified(event) {
+    let object = event.object
     let { changed, statusPatch } = bindConfigGen.addOrUpdateZone(object)
 
     if (changed) {
@@ -138,30 +111,58 @@ async function main(options) {
     }
   }
 
-  dnsSecZoneCrdWatcher.on('added', addedOrModified)
-  dnsSecZoneCrdWatcher.on('modified', addedOrModified)
-  dnsSecZoneCrdWatcher.on('deleted', object => {
+  function deleted(event) {
     logger.debug(`Deleting zone with object`, object)
     if (bindConfigGen.deleteZone(object))
       bindProcessRunner.restart();
+  }
+
+  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
+  const dnssecOperator = new DnssecOperator({ logger, crdFile })
+
+  dnssecOperator.events.on('added', addedOrModified)
+  dnssecOperator.events.on('modified', addedOrModified)
+  dnssecOperator.events.on('deleted', deleted)
+
+  await dnssecOperator.start();
+
+  return dnssecOperator;
+}
+
+async function startDummyCrdGenerator(client, options, crdGroup, logger, interval) {
+  dummyCrdGen({
+    client,
+    namespace: options.namespace,
+    logger,
+    crdGroup,
+    interval
   })
+}
 
-  // Start dummy crd generator
+
+async function main(options) {
+  const logger = getLogger("main")
+  logger.log("Starting main with options", options)
+
+  const bindConfigGen = await startBindConfigGenerator(options, getLogger("BindConfigGen"))
+  const bindProcessRunner = await startBindProcessRunner(options, getLogger("BindProcessRunner"))
+  const healthEndpoint = await startHealthEndpoint(bindProcessRunner, options, getLogger("HealthEndpoint"))
+  const dnssecOperator = await startDnssecOperator(options, bindConfigGen, bindProcessRunner, getLogger("DnssecOperator"))
+
   if (options.dryrun) {
-    dummyCrdGen({
-      client: client,
-      namespace: options.namespace,
-      logger: getLogger("DummyCrdGen"),
-      crdGroup: dnsSecZoneCrd.spec.group,
-      interval: 5000
-    })
+    /*
+    let interval = 15000
 
+    const client = new GodaddyClient()
+    await client.loadSpec()
+
+    const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
+    await client.addCustomResourceDefinition(yaml.safeLoad(fs.readFileSync(crdFile, "utf8")))
+
+    await startDummyCrdGenerator(client, options, dnssecOperator.crdGroup, getLogger("DummyCrdGenerator"), interval)
+    */
   }
 
-  //Start readiness and liveness probes for kubernetes
-  if (options.healthendpoint) {
-    startHealth(options.healthendpoint)
-  }
 }
 
 if (options.help) {
@@ -169,6 +170,7 @@ if (options.help) {
   process.exit(0)
 
 } else {
+  const logger = getLogger("index")
   main(options)
     .then(() => { logger.debug("Main method returned, exiting.") })
     .catch(e => { logger.error("Exception in main method:", e) })
