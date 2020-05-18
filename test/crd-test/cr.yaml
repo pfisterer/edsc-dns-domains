@@ -1,0 +1,7 @@
+apiVersion: acme.org/v1
+kind: Foo
+metadata:
+  name: testtest
+  namespace: default
+spec:
+  bar: "abc"

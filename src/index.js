@@ -100,25 +100,24 @@ async function startBindProcessRunner(options, logger) {
 }
 
 async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, logger) {
+  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
+  const dnssecOperator = new DnssecOperator(logger, crdFile)
 
-  function addedOrModified(event) {
+  async function addedOrModified(event) {
     let object = event.object
     let { changed, statusPatch } = bindConfigGen.addOrUpdateZone(object)
 
     if (changed) {
       bindProcessRunner.restart();
-      dnsSecZoneCrdWatcher.updateStatus(object, statusPatch)
+      await dnssecOperator.setResourceStatus(event.meta, statusPatch)
     }
   }
 
-  function deleted(event) {
+  async function deleted(event) {
     logger.debug(`Deleting zone with object`, object)
     if (bindConfigGen.deleteZone(object))
       bindProcessRunner.restart();
   }
-
-  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
-  const dnssecOperator = new DnssecOperator({ logger, crdFile })
 
   dnssecOperator.events.on('added', addedOrModified)
   dnssecOperator.events.on('modified', addedOrModified)
@@ -152,13 +151,13 @@ async function main(options) {
   if (options.dryrun) {
     /*
     let interval = 15000
-
+ 
     const client = new GodaddyClient()
     await client.loadSpec()
-
+ 
     const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
     await client.addCustomResourceDefinition(yaml.safeLoad(fs.readFileSync(crdFile, "utf8")))
-
+ 
     await startDummyCrdGenerator(client, options, dnssecOperator.crdGroup, getLogger("DummyCrdGenerator"), interval)
     */
   }
@@ -170,8 +169,9 @@ if (options.help) {
   process.exit(0)
 
 } else {
-  const logger = getLogger("index")
-  main(options)
-    .then(() => { logger.debug("Main method returned, exiting.") })
-    .catch(e => { logger.error("Exception in main method:", e) })
+
+  (
+    async () => await main(options)
+  )();
+
 }

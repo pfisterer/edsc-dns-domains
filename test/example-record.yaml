@@ -2,6 +2,7 @@ apiVersion: dnsseczone.farberg.de/v1
 kind: DnssecZone
 metadata:
   name: bla
+  namespace: default
 spec:
   domainName: "bla.dhbw.edsc.cloud"
   adminContact: "admin.edsc.cloud"
