@@ -3,7 +3,7 @@ const EventEmitter = require('events')
 
 module.exports = class DnssecOperator extends Operator {
 
-	constructor({ logger, crdFile }) {
+	constructor(logger, crdFile) {
 		super(logger);
 		this.crdFile = crdFile;
 		this.logger = logger;
@@ -17,39 +17,29 @@ module.exports = class DnssecOperator extends Operator {
 		this.crdPlural = plural;
 
 		this.logger.debug(`Watching group ${group}, versions[0].name ${versions[0].name}, plural ${plural}`)
-		await this.watchResource(group, versions[0].name, plural, async (e) => {
+
+		await this.watchResource(group, versions[0].name, plural, async (event) => {
 			try {
-				if (e.type === ResourceEventType.Added) {
-					logger.debug("Resource added", e)
-					this.emit("added", event)
+				if (event.type === ResourceEventType.Added) {
+					this.logger.debug("Resource added", event)
+					this.events.emit("added", event)
 
-				} else if (e.type === ResourceEventType.Modified) {
-					logger.debug("Resource modified", e)
-					this.emit("modified", event)
+				} else if (event.type === ResourceEventType.Modified) {
+					this.logger.debug("Resource modified", event)
+					this.events.emit("modified", event)
 
-				} else if (e.type === ResourceEventType.Deleted) {
-					logger.debug("Resource deleted", e)
-					this.emit("deleted", event)
+				} else if (event.type === ResourceEventType.Deleted) {
+					this.logger.debug("Resource deleted", event)
+					this.events.emit("deleted", event)
 
 				} else {
-					logger.warn(`Unknown event type: ${e.type} of event `, e)
+					this.logger.warn(`Unknown event type: ${e.type} of event `, e)
 				}
 			} catch (err) {
-				logger.warn(`Error in watch resource:`, err)
+				this.logger.warn(`Error in watch resource:`, err)
 			}
 		});
 
-	}
-
-	async updateStatus(e, statusPatch) {
-		/*
-
-		e.object.body.status = Object.assign(body.status || {}, statusPatch)
-
-		await this.setResourceStatus(e.meta, {
-			observedGeneration: metadata.generation
-		});
-		*/
 	}
 
 }
