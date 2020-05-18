@@ -104,7 +104,7 @@ async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, lo
   const dnssecOperator = new DnssecOperator(logger, crdFile)
 
   async function addedOrModified(event) {
-    let object = event.object
+    const object = event.object
     let { changed, statusPatch } = bindConfigGen.addOrUpdateZone(object)
 
     if (changed) {
@@ -114,6 +114,7 @@ async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, lo
   }
 
   async function deleted(event) {
+    const object = event.object
     logger.debug(`Deleting zone with object`, object)
     if (bindConfigGen.deleteZone(object))
       bindProcessRunner.restart();
