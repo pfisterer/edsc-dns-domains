@@ -3,10 +3,11 @@ const EventEmitter = require('events')
 
 module.exports = class DnssecOperator extends Operator {
 
-	constructor(logger, crdFile) {
+	constructor(logger, crdFile, namespace) {
 		super(logger);
 		this.crdFile = crdFile;
 		this.logger = logger;
+		this.namespace = namespace
 		this.events = new EventEmitter();
 	}
 
@@ -18,7 +19,7 @@ module.exports = class DnssecOperator extends Operator {
 
 		this.logger.debug(`Watching group ${group}, versions[0].name ${versions[0].name}, plural ${plural}`)
 
-		await this.watchResource(group, versions[0].name, plural, async (event) => {
+		let watcher = async (event) => {
 			try {
 				if (event.type === ResourceEventType.Added) {
 					this.logger.debug("Resource added", event)
@@ -38,8 +39,9 @@ module.exports = class DnssecOperator extends Operator {
 			} catch (err) {
 				this.logger.warn(`Error in watch resource:`, err)
 			}
-		});
+		}
 
+		await this.watchResource(group, versions[0].name, plural, watcher, this.namespace);
 	}
 
 }
