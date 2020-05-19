@@ -215,7 +215,7 @@ options {
 			.sync(this.generatedFilesDir() + '*.conf')
 			.map(el => `include "${el}";\n`)
 			.sort()
-			.reduce((a, b) => a + b)
+			.reduce((a, b) => a + b, "")
 
 		// Write changed config file only
 		let changed = this.conditionalUpdateDest(config, this.bindConfLocalFileName());

@@ -24,10 +24,8 @@ Run `docker build -t farberg/bind-dnssec-config .`
 
 `docker run --rm -ti farberg/bind-dnssec-config --entrypoint sh`
 
-# Good reads
-
-- [Invoking the Kubernetes API in Node.js](https://endaphelan.me/guides/kubernetes/invoking-the-kubernetes-api-in-node/)
-
+TODOs:
+- Implement a real control loop to detect deleted zones that still have files lingering around
 
 ## FAQ
 
