@@ -101,7 +101,7 @@ async function startBindProcessRunner(options, logger) {
 
 async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, logger) {
   const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
-  const dnssecOperator = new DnssecOperator(logger, crdFile)
+  const dnssecOperator = new DnssecOperator(logger, crdFile, options.namespace)
 
   async function addedOrModified(event) {
     const object = event.object
