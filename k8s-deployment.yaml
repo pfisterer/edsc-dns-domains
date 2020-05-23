@@ -48,12 +48,12 @@ metadata:
 spec:
   selector:
     app: bind_dnssec_config
+  type: LoadBalancer
   ports:
+    - protocol: UDP
+      port: 53
+      targetPort: 53
     # cf. https://github.com/kubernetes/kubernetes/pull/64471 (Allow for mixed UDP/TCP ports on LoadBalancer Services)
     #    - protocol: TCP
     #      port: 53
     #      targetPort: 53
-    - protocol: UDP
-      port: 53
-      targetPort: 53
-  type: LoadBalancer

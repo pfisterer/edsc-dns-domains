@@ -1,7 +1,8 @@
+const k8s = require('@kubernetes/client-node');
 const { default: Operator, ResourceEventType } = require('@dot-i/k8s-operator');
 const EventEmitter = require('events')
 
-module.exports = class DnssecOperator extends Operator {
+module.exports = class CrdWatcher extends Operator {
 
 	constructor(logger, crdFile, namespace) {
 		super(logger);
@@ -13,6 +14,7 @@ module.exports = class DnssecOperator extends Operator {
 
 	async init() {
 		const { group, versions, plural } = await this.registerCustomResourceDefinition(this.crdFile);
+		this.customObjectsApi = this.kubeConfig.makeApiClient(k8s.CustomObjectsApi)
 		this.crdGroup = group;
 		this.crdVersions = versions;
 		this.crdPlural = plural;
@@ -42,6 +44,19 @@ module.exports = class DnssecOperator extends Operator {
 		}
 
 		await this.watchResource(group, versions[0].name, plural, watcher, this.namespace);
+	}
+
+	async listItems() {
+		const res = await this.customObjectsApi.listNamespacedCustomObject(
+			this.crdGroup,
+			this.crdVersions[0].name,
+			'default', //<your namespace>
+			this.crdPlural,
+			'false',
+			'', //<labelSelectorExpresson>
+		);
+
+		return res.body.items
 	}
 
 }

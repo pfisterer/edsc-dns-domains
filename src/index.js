@@ -8,9 +8,10 @@ var log4js = require('log4js')
 //const Client = require('kubernetes-client').Client
 //const config = require('kubernetes-client/backends/request').config
 
-const DnssecOperator = require('./dnssec-operator')
+const CrdWatcher = require('./crd-watcher')
 const BindConfigGen = require("./bind-config-gen")
 const BindProcessRunner = require("./bind-process-runner");
+const Reconciler = require("./reconciler");
 const HealthEndpoint = require("./health-endpoint");
 const dummyCrdGen = require('./dummy-crd-gen')
 const GodaddyClient = require('kubernetes-client').Client
@@ -99,9 +100,9 @@ async function startBindProcessRunner(options, logger) {
   return bindProcessRunner
 }
 
-async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, logger) {
+async function startCrdWatcher(options, bindConfigGen, bindProcessRunner, logger) {
   const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
-  const dnssecOperator = new DnssecOperator(logger, crdFile, options.namespace)
+  const crdWatcher = new CrdWatcher(logger, crdFile, options.namespace)
 
   async function addedOrModified(event) {
     const object = event.object
@@ -109,7 +110,7 @@ async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, lo
 
     if (changed) {
       bindProcessRunner.restart();
-      await dnssecOperator.setResourceStatus(event.meta, statusPatch)
+      await crdWatcher.setResourceStatus(event.meta, statusPatch)
     }
   }
 
@@ -120,14 +121,19 @@ async function startDnssecOperator(options, bindConfigGen, bindProcessRunner, lo
       bindProcessRunner.restart();
   }
 
-  dnssecOperator.events.on('added', addedOrModified)
-  dnssecOperator.events.on('modified', addedOrModified)
-  dnssecOperator.events.on('deleted', deleted)
+  crdWatcher.events.on('added', addedOrModified)
+  crdWatcher.events.on('modified', addedOrModified)
+  crdWatcher.events.on('deleted', deleted)
 
-  await dnssecOperator.start();
+  await crdWatcher.start();
 
-  return dnssecOperator;
+  return crdWatcher;
 }
+
+async function startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, logger) {
+  return new Reconciler(crdWatcher, bindConfigGen, bindProcessRunner, logger)
+}
+
 
 async function startDummyCrdGenerator(client, options, crdGroup, logger, interval) {
   dummyCrdGen({
@@ -147,7 +153,8 @@ async function main(options) {
   const bindConfigGen = await startBindConfigGenerator(options, getLogger("BindConfigGen"))
   const bindProcessRunner = await startBindProcessRunner(options, getLogger("BindProcessRunner"))
   const healthEndpoint = await startHealthEndpoint(bindProcessRunner, options, getLogger("HealthEndpoint"))
-  const dnssecOperator = await startDnssecOperator(options, bindConfigGen, bindProcessRunner, getLogger("DnssecOperator"))
+  const crdWatcher = await startCrdWatcher(options, bindConfigGen, bindProcessRunner, getLogger("CrdWatcher"))
+  const reconciler = await startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, getLogger("Reconciler"));
 
   if (options.dryrun) {
     /*
@@ -159,7 +166,7 @@ async function main(options) {
     const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
     await client.addCustomResourceDefinition(yaml.safeLoad(fs.readFileSync(crdFile, "utf8")))
  
-    await startDummyCrdGenerator(client, options, dnssecOperator.crdGroup, getLogger("DummyCrdGenerator"), interval)
+    await startDummyCrdGenerator(client, options, crdWatcher.crdGroup, getLogger("DummyCrdGenerator"), interval)
     */
   }
 

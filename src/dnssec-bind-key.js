@@ -2,7 +2,7 @@ const fs = require("fs")
 const path = require('path');
 const { execSync } = require('child_process');
 const nearley = require("nearley");
-const grammar = require("./dnssec-bind-key-grammar");
+const grammar = require("./bind-key-grammar");
 
 module.exports = class BindDnsSecKey {
 

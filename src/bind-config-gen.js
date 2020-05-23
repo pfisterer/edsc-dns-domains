@@ -1,8 +1,9 @@
 const tmp = require('tmp');
 const fs = require('fs');
 const crypto = require('crypto');
-const glob = require("glob")
-const rmf = require('rimraf')
+const glob = require('glob')
+const path = require('path')
+const globpromise = require('glob-promise')
 const BindDnsSecKey = require("../src/dnssec-bind-key")
 
 tmp.setGracefulCleanup({ unsafeCleanup: true });
@@ -14,7 +15,7 @@ function logAndThrow(logger, err) {
 
 module.exports = class BindConfigUpdater {
 
-	constructor(options, logger) {
+	constructor(options) {
 		this.options = options
 		this.configDir = options.configdir
 		this.logger = options.logger
@@ -33,14 +34,19 @@ module.exports = class BindConfigUpdater {
 	generatedFilesDir() {
 		return this.configDir + "/gen/"
 	}
+
 	bindKeyFileName(zone) {
 		return this.generatedFilesDir() + zone.domainName + ".key";
 	}
+	bindZoneFileName(zone) {
+		return this.generatedFilesDir() + zone.domainName + ".db";
+	}
+
 	bindConfigFileName(zone) {
 		return this.generatedFilesDir() + zone.domainName + ".conf";
 	}
-	bindZoneFileName(zone) {
-		return this.generatedFilesDir() + zone.domainName + ".db";
+	zoneNameFromBindConfigFileName(filename) {
+		return path.basename(filename, '.conf')
 	}
 
 	validateZone(zone) {
@@ -49,7 +55,6 @@ module.exports = class BindConfigUpdater {
 
 		if (!zone.domainName.match(validDomainRegexp))
 			logAndThrow(this.logger, `Not adding/updating invalid domain name ${zone.domainName}`)
-
 	}
 
 	ensureConfigPathsExist() {
@@ -90,7 +95,6 @@ module.exports = class BindConfigUpdater {
 	// named.conf
 	// -------------------------------------------------------------------
 
-
 	generateNamedConf() {
 
 		let namedConf = `
@@ -118,7 +122,6 @@ options {
 		return { changed: changed };
 	}
 
-
 	// -------------------------------------------------------------------
 	// DNSSEC keygen
 	// -------------------------------------------------------------------
@@ -143,16 +146,9 @@ options {
 	}
 
 	// -------------------------------------------------------------------
-	// Config 
+	// Bind Config File
 	// -------------------------------------------------------------------
 
-	/*
-		zone "demo.e.example.com" {
-				type master;
-				file "/var/cache/bind/db.demo.e.example.com";
-				allow-update { key demo.e.example.com; };
-		};
-	*/
 	getOrCreateBindConfigFile(zone, keyName) {
 		let confFileName = this.bindConfigFileName(zone)
 		let zoneFileName = this.bindZoneFileName(zone);
@@ -171,18 +167,6 @@ options {
 	// Zonefile
 	// -------------------------------------------------------------------
 
-	/* 
-		$ORIGIN .
-		$TTL 60	; 1 minute
-		demo.e.example.com	IN SOA	demo.e.example.com. admin.example.com. (
-						59         ; serial
-						60         ; refresh (1 minute)
-						60         ; retry (1 minute)
-						600        ; expire (10 minutes)
-						60         ; minimum (1 minute)
-						)
-					NS	e-ns.example.com.
-	*/
 	getOrCreateZoneFile(zone, zoneFile) {
 
 		// Generate config contents
@@ -221,6 +205,12 @@ options {
 		let changed = this.conditionalUpdateDest(config, this.bindConfLocalFileName());
 
 		return { changed: changed }
+	}
+
+	async getZones() {
+		// Iterate all config files and generate include "filename"; configs
+		const configs = await globpromise(this.generatedFilesDir() + '*.conf')
+		return configs.map(el => this.zoneNameFromBindConfigFileName(el))
 	}
 
 	// -------------------------------------------------------------------

@@ -1,8 +1,9 @@
+const k8s = require('@kubernetes/client-node');
 const { default: Operator, ResourceEventType } = require('@dot-i/k8s-operator');
 const EventEmitter = require('events')
 const path = require("path")
 
-class DnssecOperator extends Operator {
+class CrdWatcher extends Operator {
 
 	constructor(logger, crdFile) {
 		super(logger);
@@ -14,6 +15,7 @@ class DnssecOperator extends Operator {
 	async init() {
 		console.log("this.crdFile", this.crdFile)
 		const { group, versions, plural } = await this.registerCustomResourceDefinition(this.crdFile);
+		this.customObjectsApi = this.kubeConfig.makeApiClient(k8s.CustomObjectsApi)
 		this.crdGroup = group;
 		this.crdVersions = versions;
 		this.crdPlural = plural;
@@ -40,6 +42,23 @@ class DnssecOperator extends Operator {
 
 	}
 
+	async listItems() {
+
+
+
+		const res = await this.customObjectsApi.listNamespacedCustomObject(
+			this.crdGroup,
+			this.crdVersions[0].name,
+			'default', //<your namespace>
+			this.crdPlural,
+			'false',
+			'', //<labelSelectorExpresson>
+		);
+
+		return res.body
+	}
+
+
 }
 
 process.on('unhandledRejection', err => console.error(err));
@@ -47,6 +66,7 @@ process.on('unhandledRejection', err => console.error(err));
 (async () => {
 	const p = path.join(__dirname, "../src/crd-defs/dnssec-zone-crd-v1beta1.yaml")
 	console.log(p)
-	const operator = new DnssecOperator(console, p);
+	const operator = new CrdWatcher(console, p);
 	await operator.start();
+	console.log(await operator.listItems())
 })();
