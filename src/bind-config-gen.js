@@ -174,10 +174,10 @@ options {
 	$TTL ${ spec.ttlSeconds}; 1 minute
 	${spec.domainName} IN SOA	${spec.domainName}.${spec.adminContact} (
 		${Math.round(Date.now() / 6000)}; serial
-	${spec.refreshSeconds}; refresh(1 minute)
-	${spec.retrySeconds}; retry(1 minute)
-	${spec.expireSeconds}; expire(10 minutes)
-	${spec.minimumSeconds}; minimum(1 minute)
+		${spec.refreshSeconds}; refresh(1 minute)
+		${spec.retrySeconds}; retry(1 minute)
+		${spec.expireSeconds}; expire(10 minutes)
+		${spec.minimumSeconds}; minimum(1 minute)
 	)
 	NS	${spec.domainName}.
 `
@@ -257,12 +257,15 @@ options {
 	}
 
 	deleteZone(spec) {
-		this.logger.debug(`Deleting zone ${spec}`)
+		this.logger.debug(`Deleting zone`, spec)
 
 		this.validateZone(spec);
-		fs.unlinkSync(this.bindKeyFileName(spec));
-		fs.unlinkSync(this.bindConfigFileName(spec));
-		fs.unlinkSync(this.bindZoneFileName(spec));
+		const filesToDelete = [this.bindKeyFileName(spec), this.bindConfigFileName(spec), this.bindZoneFileName(spec)]
+
+		for (const f of filesToDelete) {
+			this.logger.debug(`Deleting file for zone ${spec.domainName}`, f)
+			fs.unlinkSync(f);
+		}
 
 		let { changed: namedConfChanged } = this.generateNamedConf()
 		let { changed: namedConfLocalChanged } = this.updateNamedConfLocal()
