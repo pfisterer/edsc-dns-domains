@@ -24,15 +24,15 @@ module.exports = class CrdWatcher extends Operator {
 		let watcher = async (event) => {
 			try {
 				if (event.type === ResourceEventType.Added) {
-					this.logger.debug("Resource added", event)
+					this.logger.debug("Resource added", event.object.metadata.name)
 					this.events.emit("added", event)
 
 				} else if (event.type === ResourceEventType.Modified) {
-					this.logger.debug("Resource modified", event)
+					this.logger.debug("Resource modified", event.object.metadata.name)
 					this.events.emit("modified", event)
 
 				} else if (event.type === ResourceEventType.Deleted) {
-					this.logger.debug("Resource deleted", event)
+					this.logger.debug("Resource deleted", event.object.metadata.name)
 					this.events.emit("deleted", event)
 
 				} else {
@@ -44,6 +44,10 @@ module.exports = class CrdWatcher extends Operator {
 		}
 
 		await this.watchResource(group, versions[0].name, plural, watcher, this.namespace);
+	}
+
+	getCustomObjectsApi() {
+		return this.customObjectsApi
 	}
 
 	async listItems() {

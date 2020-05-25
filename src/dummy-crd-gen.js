@@ -1,16 +1,27 @@
 const randomWords = require('./randomwords.js')
 
-module.exports = function generateRandomCrds(options) {
-	let k8sclient = options.client
-	let namespace = options.namespace
-	let logger = options.logger
-	let crdGroup = options.crdGroup
-	let interval = options.interval || 5000
+
+module.exports = function generateRandomCrds(k8sclient, interval, crdGroup, version, namespace, plural, logger) {
+
+	let createCustomResource = async (body) => {
+		return k8sclient.createNamespacedCustomObject(crdGroup, version, namespace, plural, body)
+	}
+
+	let deleteCustomResource = async (name) => {
+		try {
+			return await k8sclient.deleteNamespacedCustomObject(crdGroup, version, namespace, plural, name)
+		} catch (e) {
+			logger.warn(`Unable to delete ${name}: `, e)
+			return null;
+		}
+
+	}
 
 	let genFunc = async () => {
 		const name = randomWords(2).join('.')
 		const meta_name = `domain-${name}`
 
+		// Create spec
 		const dnsZone = {
 			"apiVersion": "dnsseczone.farberg.de/v1",
 			"kind": "DnssecZone",
@@ -26,30 +37,21 @@ module.exports = function generateRandomCrds(options) {
 			}
 		}
 
+		// Create
 		logger.debug(`Creating zone ${name} in namespace ${namespace}`)
-		const create = await k8sclient
-			.apis[crdGroup].v1
-			.namespaces(namespace)
-			.dnsseczones.post({ body: dnsZone })
+		let createResult = await createCustomResource(dnsZone)
+		//logger.debug(`Done creating zone ${name} in namespace ${namespace}, result = `, createResult)
 
-		logger.debug(`Done creating zone ${name} in namespace ${namespace}, result = `, create)
-
+		// Delete
 		setTimeout(async () => {
-			logger.debug(`Deleting dnssec zone ${name}, meta.name: ${meta_name}`)
+			logger.debug(`Deleting dnssec zone ${name} with meta.name: ${meta_name}`)
+			let deleteResult = await deleteCustomResource(meta_name)
+			//logger.debug(`Done deleting dnssec zone ${name}, meta.name: ${meta_name}, result = `, deleteResult)
 
-			const del = await k8sclient
-				.apis[crdGroup].v1
-				.namespaces(namespace)
-				.dnsseczones(meta_name)
-				.delete()
-
-			logger.debug(`Done deleting dnssec zone ${name}, meta.name: ${meta_name}, result = `, del)
-
-		}, interval / 2)
+		}, 2 * interval)
 	}
 
 	genFunc();
 	setInterval(genFunc, interval)
-
 }
 

@@ -1,61 +1,108 @@
 const { fixed: { setIntervalAsync: setIntervalAsync }, clearIntervalAsync } = require('set-interval-async')
 
+class ReconcilerData {
+	constructor(crds, zones) {
+		this.crds = crds
+		this.zones = zones
+	}
 
-module.exports = class Reconciler {
+	difference(a1, a2) {
+		return a1.filter(x => !a2.includes(x));
+	}
 
-	constructor(crdWatcher, bindConfigGen, bindProcessRunner, logger) {
+	getDispensableZones() {
+		return this.difference(this.zones, this.crds);
+	}
+
+	getMissingZones() {
+		return this.difference(this.crds, this.zones);
+	}
+
+}
+
+class Reconciler {
+
+	constructor(crdWatcher, bindConfigGen, bindProcessRunner, reconcileInterval, logger) {
 		this.crdWatcher = crdWatcher;
 		this.bindConfigGen = bindConfigGen
 		this.bindProcessRunner = bindProcessRunner;
 		this.logger = logger;
 
-		this.crdWatcher.events.on('added', () => this.addedOrModified)
-		this.crdWatcher.events.on('modified', () => this.addedOrModified)
-		this.crdWatcher.events.on('deleted', () => deleted)
+		this.crdWatcher.events.on('added', (e) => this.handleAddedOrModifiedEvent(e))
+		this.crdWatcher.events.on('modified', (e) => this.handleAddedOrModifiedEvent(e))
+		this.crdWatcher.events.on('deleted', (e) => this.handleDeletedEvent(e))
 
-		this.reconcileInterval = 5000;
-		this.setupReconcileTimer();
+		this.reconcileInterval = reconcileInterval;
+		this.setupReconcileTimer(this.reconcileInterval);
 	}
 
 	setupReconcileTimer() {
+		// Cancel existing timer
 		if (this.reconcileTimer) {
 			this.logger.debug(`Clearing existing timer`, this.reconcileTimer)
 			clearIntervalAsync(this.reconcileTimer)
 		}
 
+		// Setup new timer
 		this.reconcileTimer = setIntervalAsync(async () => {
 			this.logger.debug(`Running reconcile from timer`)
 			await this.reconcile();
 		}, this.reconcileInterval)
 	}
 
-	async addedOrModified(event) {
-		const object = event.object
-		let { changed, statusPatch } = this.bindConfigGen.addOrUpdateZone(object)
+	async handleAddedOrModifiedEvent(event) {
+		this.logger.debug("Added/Modified event for zone ", event.object.spec.domainName)
+		let { changed, status } = this.bindConfigGen.addOrUpdateZone(event.object.spec)
 
 		if (changed) {
 			this.bindProcessRunner.restart();
-			await this.crdWatcher.setResourceStatus(event.meta, statusPatch)
+			await this.crdWatcher.setResourceStatus(event.meta, status)
 		}
 	}
 
-	async deleted(event) {
-		const object = event.object
-		this.logger.debug(`Deleting zone with object`, object)
-		if (bindConfigGen.deleteZone(object))
+	async handleDeletedEvent(event) {
+		this.logger.debug("Deleted event for zone ", event.object.spec.domainName)
+		let { changed, statusPatch } = this.remove(event.object.spec)
+
+		if (changed)
 			bindProcessRunner.restart();
+
+		return { changed, statusPatch }
+	}
+
+	async add(spec) {
+		// returns { changed, status }
+		return this.bindConfigGen.addOrUpdateZone(spec)
+	}
+
+	async remove(spec) {
+		this.logger.debug(`Removing zone with object`, spec)
+		// returns whether the config file has changed
+		return this.bindConfigGen.deleteZone(spec);
 	}
 
 	async reconcile() {
 		this.logger.debug(`Starting reconciliation.`)
 
-		const customResources = await this.crdWatcher.listItems()
+		const customResources = (await this.crdWatcher.listItems())
+		const customResourcesDomainNames = customResources.map(el => el.spec.domainName)
+		const zones = await this.bindConfigGen.getZones();
 
-		for (const zone of await this.bindConfigGen.getZones()) {
-			this.logger.debug(`Reconcile, got existing zone ${zone}`)
+		const data = new ReconcilerData(customResourcesDomainNames, zones, this.logger)
+
+		for (const name of data.getDispensableZones()) {
+			this.logger.debug(`Deleting disposable zone = `, name)
+			this.remove({ domainName: name })
+		}
+
+		for (const name of data.getMissingZones()) {
+			this.logger.debug(`Adding missing zone = `, name)
+			this.add({ domainName: name })
 		}
 
 		this.logger.debug(`Reconciliation done.`)
 	}
 
 }
+
+module.exports = { Reconciler, ReconcilerData }

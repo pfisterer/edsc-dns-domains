@@ -1,61 +1,34 @@
-const commandLineArgs = require('command-line-args')
-const commandLineUsage = require('command-line-usage')
 const path = require('path')
-const fs = require('fs')
-const yaml = require('js-yaml')
 var log4js = require('log4js')
-
-//const Client = require('kubernetes-client').Client
-//const config = require('kubernetes-client/backends/request').config
+const { program: optionparser } = require('commander')
 
 const CrdWatcher = require('./crd-watcher')
 const BindConfigGen = require("./bind-config-gen")
 const BindProcessRunner = require("./bind-process-runner");
-const Reconciler = require("./reconciler");
+const { Reconciler } = require("./reconciler");
 const HealthEndpoint = require("./health-endpoint");
 const dummyCrdGen = require('./dummy-crd-gen')
-const GodaddyClient = require('kubernetes-client').Client
 
 // ------------------------------------------------
 // Parse command line options
 // ------------------------------------------------
 
-const cmdLineOpts = [
-  { name: 'verbose', alias: 'v', type: Boolean, description: "Display verbose output" },
-  { name: 'dryrun', type: Boolean, description: "Do not actually write configuration files" },
-  { name: 'configdir', type: String, description: "The directory where to write the configuration to" },
-  { name: 'crddef', type: String, description: "Path to custom resource defs(CRDs) to use" },
-  { name: 'namespace', type: String, description: "Namespace to use" },
-  { name: 'rndcconfgenpath', type: String, description: "Path to the rndc-confgen binary" },
-  { name: 'bindbinary', type: String, description: "Path to named binary" },
-  { name: 'bindextraargs', type: String, description: "Extra args to pass to the bind binary" },
-  { name: 'healthendpoint', type: Number, description: "Start a k8s health endpoint on this port" },
-  { name: 'help', alias: 'h', type: Boolean, description: "Print this help message" }
-];
-
-const usage = commandLineUsage([
-  {
-    header: 'Typical Example',
-    content: 'node index.js --dryrun --verbose'
-  },
-  {
-    header: 'Options',
-    optionList: cmdLineOpts
-  },/*
-  {
-    content: 'Project home: {underline https://github.com/me/example}'
-  }*/
-])
-
-const options = Object.assign({}, {
-  crddef: path.join(__dirname, "./crd-defs"),
-  configdir: "/tmp",
-  rndcconfgenpath: "/usr/sbin/rndc-confgen",
-  bindbinary: "/usr/sbin/named",
-  namespace: "default",
-  healthendpoint: 7777
-}, commandLineArgs(cmdLineOpts));
-
+const options = optionparser
+  .storeOptionsAsProperties(true)
+  .option('-v, --verbose', "Display verbose output", false)
+  .option('--dryrun', "Do not actually write configuration files", "")
+  .option('--configdir <path>', "The directory where to write the configuration to", "/tmp")
+  .option('--crddef <path>', "Path to custom resource defs(CRDs) to use", path.join(__dirname, "./crd-defs"))
+  .option('--namespace <namespace>', "Namespace to use", "default")
+  .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
+  .option('--bindbinary <path>', "Path to named binary", "/usr/sbin/named")
+  .option('--bindextraargs <extragargs>', "Extra args to pass to the bind binary", "")
+  .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
+  .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
+  .version('0.0.1pre-alpha')
+  .addHelpCommand()
+  .parse()
+  .opts()
 
 // ------------------------------------------------
 // Set global log level options
@@ -100,86 +73,41 @@ async function startBindProcessRunner(options, logger) {
   return bindProcessRunner
 }
 
-async function startCrdWatcher(options, bindConfigGen, bindProcessRunner, logger) {
+async function startCrdWatcher(options, logger) {
   const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
   const crdWatcher = new CrdWatcher(logger, crdFile, options.namespace)
-
-  async function addedOrModified(event) {
-    const object = event.object
-    let { changed, statusPatch } = bindConfigGen.addOrUpdateZone(object)
-
-    if (changed) {
-      bindProcessRunner.restart();
-      await crdWatcher.setResourceStatus(event.meta, statusPatch)
-    }
-  }
-
-  async function deleted(event) {
-    const object = event.object
-    logger.debug(`Deleting zone with object`, object)
-    if (bindConfigGen.deleteZone(object))
-      bindProcessRunner.restart();
-  }
-
-  crdWatcher.events.on('added', addedOrModified)
-  crdWatcher.events.on('modified', addedOrModified)
-  crdWatcher.events.on('deleted', deleted)
-
   await crdWatcher.start();
 
   return crdWatcher;
 }
 
-async function startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, logger) {
-  return new Reconciler(crdWatcher, bindConfigGen, bindProcessRunner, logger)
-}
-
-
-async function startDummyCrdGenerator(client, options, crdGroup, logger, interval) {
-  dummyCrdGen({
-    client,
-    namespace: options.namespace,
-    logger,
-    crdGroup,
-    interval
-  })
+async function startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, reconcileInterval, logger) {
+  return new Reconciler(crdWatcher, bindConfigGen, bindProcessRunner, reconcileInterval, logger)
 }
 
 
 async function main(options) {
   const logger = getLogger("main")
-  logger.log("Starting main with options", options)
+  logger.debug(`Starting with options`, options)
 
   const bindConfigGen = await startBindConfigGenerator(options, getLogger("BindConfigGen"))
   const bindProcessRunner = await startBindProcessRunner(options, getLogger("BindProcessRunner"))
+  const crdWatcher = await startCrdWatcher(options, getLogger("CrdWatcher"))
+  const reconciler = await startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, options.reconcileInterval, getLogger("Reconciler"));
   const healthEndpoint = await startHealthEndpoint(bindProcessRunner, options, getLogger("HealthEndpoint"))
-  const crdWatcher = await startCrdWatcher(options, bindConfigGen, bindProcessRunner, getLogger("CrdWatcher"))
-  const reconciler = await startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, getLogger("Reconciler"));
 
   if (options.dryrun) {
-    /*
-    let interval = 15000
- 
-    const client = new GodaddyClient()
-    await client.loadSpec()
- 
-    const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
-    await client.addCustomResourceDefinition(yaml.safeLoad(fs.readFileSync(crdFile, "utf8")))
- 
-    await startDummyCrdGenerator(client, options, crdWatcher.crdGroup, getLogger("DummyCrdGenerator"), interval)
-    */
+    let interval = 20000
+
+    dummyCrdGen(crdWatcher.getCustomObjectsApi(), interval,
+      crdWatcher.crdGroup, crdWatcher.crdVersions[0].name,
+      options.namespace, crdWatcher.crdPlural, getLogger("dummyCrdGen"))
   }
 
 }
 
-if (options.help) {
-  console.log(usage)
-  process.exit(0)
-
-} else {
-
-  (
-    async () => await main(options)
-  )();
-
-}
+// Start main method
+(async () => main(options)
+  .then(() => console.log("Main done"))
+  .catch(e => { console.log("Error in main: ", e); process.exit(1) })
+)();

@@ -35,25 +35,25 @@ module.exports = class BindConfigUpdater {
 		return this.configDir + "/gen/"
 	}
 
-	bindKeyFileName(zone) {
-		return this.generatedFilesDir() + zone.domainName + ".key";
+	bindKeyFileName(spec) {
+		return this.generatedFilesDir() + spec.domainName + ".key";
 	}
-	bindZoneFileName(zone) {
-		return this.generatedFilesDir() + zone.domainName + ".db";
+	bindZoneFileName(spec) {
+		return this.generatedFilesDir() + spec.domainName + ".db";
 	}
 
-	bindConfigFileName(zone) {
-		return this.generatedFilesDir() + zone.domainName + ".conf";
+	bindConfigFileName(spec) {
+		return this.generatedFilesDir() + spec.domainName + ".conf";
 	}
 	zoneNameFromBindConfigFileName(filename) {
 		return path.basename(filename, '.conf')
 	}
 
-	validateZone(zone) {
+	validateZone(spec) {
 		//From https://regexr.com/3au3g
 		const validDomainRegexp = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/gi;
 
-		if (!zone.domainName.match(validDomainRegexp))
+		if (!spec.domainName.match(validDomainRegexp))
 			logAndThrow(this.logger, `Not adding/updating invalid domain name ${zone.domainName}`)
 	}
 
@@ -126,10 +126,10 @@ options {
 	// DNSSEC keygen
 	// -------------------------------------------------------------------
 
-	getOrGenerateKey(zone) {
+	getOrGenerateKey(spec) {
 		let keyGen = new BindDnsSecKey({
-			keyFileName: this.bindKeyFileName(zone),
-			keyName: zone.domainName,
+			keyFileName: this.bindKeyFileName(spec),
+			keyName: spec.domainName,
 			logger: this.logger,
 			dryrun: this.options.dryrun
 		})
@@ -149,11 +149,11 @@ options {
 	// Bind Config File
 	// -------------------------------------------------------------------
 
-	getOrCreateBindConfigFile(zone, keyName) {
-		let confFileName = this.bindConfigFileName(zone)
-		let zoneFileName = this.bindZoneFileName(zone);
+	getOrCreateBindConfigFile(spec, keyName) {
+		let confFileName = this.bindConfigFileName(spec)
+		let zoneFileName = this.bindZoneFileName(spec);
 
-		let changed = this.conditionalUpdateDest(`zone "${zone.domainName}" {
+		let changed = this.conditionalUpdateDest(`zone "${spec.domainName}" {
 	type master;
 	file "${zoneFileName}";
 	allow-update { key ${keyName}; };
@@ -167,19 +167,19 @@ options {
 	// Zonefile
 	// -------------------------------------------------------------------
 
-	getOrCreateZoneFile(zone, zoneFile) {
+	getOrCreateZoneFile(spec, zoneFile) {
 
 		// Generate config contents
 		let config = `$ORIGIN.
-	$TTL ${ zone.ttlSeconds}; 1 minute
-	${zone.domainName} IN SOA	${zone.domainName}.${zone.adminContact} (
+	$TTL ${ spec.ttlSeconds}; 1 minute
+	${spec.domainName} IN SOA	${spec.domainName}.${spec.adminContact} (
 		${Math.round(Date.now() / 6000)}; serial
-	${zone.refreshSeconds}; refresh(1 minute)
-	${zone.retrySeconds}; retry(1 minute)
-	${zone.expireSeconds}; expire(10 minutes)
-	${zone.minimumSeconds}; minimum(1 minute)
+	${spec.refreshSeconds}; refresh(1 minute)
+	${spec.retrySeconds}; retry(1 minute)
+	${spec.expireSeconds}; expire(10 minutes)
+	${spec.minimumSeconds}; minimum(1 minute)
 	)
-	NS	${zone.domainName}.
+	NS	${spec.domainName}.
 `
 		// Write config to file
 		let changed = this.conditionalUpdateDest(config, zoneFile,
@@ -214,42 +214,11 @@ options {
 	}
 
 	// -------------------------------------------------------------------
-	// Update Object Status for K8S
-	// -------------------------------------------------------------------
-
-	updateCrdStatus(_currentStatus, keyName, dnssecKey, dnssecAlgorithm) {
-		let currentStatus = _currentStatus || {}
-		let statusPatch = {};
-		let changed = false;
-
-		if (currentStatus.keyName !== keyName) {
-			this.logger.debug(`keyName has changed from ${currentStatus.keyName} to ${keyName}`)
-			statusPatch.keyName = keyName
-			changed = true
-		}
-
-		if (currentStatus.dnssecKey !== dnssecKey) {
-			this.logger.debug(`dnssecKey has changed from ${currentStatus.dnssecKey} to ${dnssecKey}`)
-			statusPatch.dnssecKey = dnssecKey
-			changed = true
-		}
-
-		if (currentStatus.dnssecAlgorithm !== dnssecAlgorithm) {
-			this.logger.debug(`dnssecAlgorithm has changed from ${currentStatus.dnssecAlgorithm} to ${dnssecAlgorithm}`)
-			statusPatch.dnssecAlgorithm = dnssecAlgorithm
-			changed = true
-		}
-
-		return { changed, statusPatch };
-	}
-
-	// -------------------------------------------------------------------
 	// Main management functionality
 	// -------------------------------------------------------------------
 
-
 	/*
-		zone:
+		spec:
 		{
 			associatedPrincipals: ["dennis.pfisterer@dhbw-mannheim.de"],
 			nameserver: "e-ns.example.com",
@@ -262,46 +231,44 @@ options {
 			ttlSeconds: 60
 		 }
 		 */
-	addOrUpdateZone(object) {
-		let zone = object.spec;
-		this.logger.debug("Starting to process zone", zone)
+	addOrUpdateZone(spec) {
+		this.logger.debug("Starting to process zone", spec)
 
-		this.validateZone(zone);
+		this.validateZone(spec);
 		this.ensureConfigPathsExist();
 
 		let { changed: namedConfChanged } = this.generateNamedConf()
-		let { changed: isNewKey, keyFile, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(zone)
-		let { changed: configChanged, zoneFile } = this.getOrCreateBindConfigFile(zone, keyName)
-		let { changed: zoneFileChanged } = this.getOrCreateZoneFile(zone, zoneFile)
+		let { changed: isNewKey, keyFile, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec)
+		let { changed: configChanged, zoneFile } = this.getOrCreateBindConfigFile(spec, keyName)
+		let { changed: zoneFileChanged } = this.getOrCreateZoneFile(spec, zoneFile)
 		let { changed: namedConfLocalChanged } = this.updateNamedConfLocal()
-		let { changed: crdStatusChanged, statusPatch } = this.updateCrdStatus(object, keyName, dnssecKey, dnssecAlgorithm)
 
-		let changed = isNewKey || configChanged || zoneFileChanged || namedConfChanged || namedConfLocalChanged || crdStatusChanged;
+		let changed = isNewKey || configChanged || zoneFileChanged || namedConfChanged || namedConfLocalChanged;
+		let status = { keyName, dnssecKey, dnssecAlgorithm }
 
-		this.logger.debug(`Done processing zone `, zone, ` (changes: isNewKey: ${isNewKey} || configChanged: ${configChanged} || zoneFileChanged: ${zoneFileChanged} || namedConfChanged: ${namedConfChanged}  || namedConfLocalChanged: ${namedConfLocalChanged}) || crdStatusChanged: ${crdStatusChanged}`)
+		this.logger.debug(`Done processing zone `, spec, ` (changes: isNewKey: ${isNewKey} || configChanged: ${configChanged} || zoneFileChanged: ${zoneFileChanged} || namedConfChanged: ${namedConfChanged}  || namedConfLocalChanged: ${namedConfLocalChanged})`)
 
 		if (changed) {
-			this.logger.info(`Zone ${zone.domainName} has changed`)
-			this.logger.debug(`Returning status patch object: ${JSON.stringify(statusPatch, null, 3)}`)
+			this.logger.info(`Zone ${spec.domainName} has changed`)
+			this.logger.debug(`Returning status object: ${JSON.stringify(status, null, 3)}`)
 		}
 
-		return { changed, statusPatch };
+		return { changed, status };
 	}
 
-	deleteZone(object) {
-		let zone = object.spec
-		this.logger.debug(`Deleting zone ${zone}`)
+	deleteZone(spec) {
+		this.logger.debug(`Deleting zone ${spec}`)
 
-		this.validateZone(zone);
-		fs.unlinkSync(this.bindKeyFileName(zone));
-		fs.unlinkSync(this.bindConfigFileName(zone));
-		fs.unlinkSync(this.bindZoneFileName(zone));
+		this.validateZone(spec);
+		fs.unlinkSync(this.bindKeyFileName(spec));
+		fs.unlinkSync(this.bindConfigFileName(spec));
+		fs.unlinkSync(this.bindZoneFileName(spec));
 
 		let { changed: namedConfChanged } = this.generateNamedConf()
 		let { changed: namedConfLocalChanged } = this.updateNamedConfLocal()
 		let changed = namedConfChanged || namedConfLocalChanged;
 
-		this.logger.debug(`Done deleting zone `, zone, ` (changes: namedConfChanged: ${namedConfChanged}  || namedConfLocalChanged: ${namedConfLocalChanged})`)
+		this.logger.debug(`Done deleting zone `, spec, ` (changes: namedConfChanged: ${namedConfChanged}  || namedConfLocalChanged: ${namedConfLocalChanged})`)
 
 		if (changed)
 			this.logger.info(`Config has changed`)
