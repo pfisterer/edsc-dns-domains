@@ -17,6 +17,12 @@ module.exports = class BindDnsSecKey {
 
 		if (!options.keyFileName)
 			throw "options.keyFileName is missing"
+
+		if (!options.keyName)
+			throw "options.keyName is missing"
+
+		if (!options.rndcConfgenPath)
+			throw "options.rndcConfgenPath is missing"
 	}
 
 	debug() {
@@ -45,7 +51,7 @@ module.exports = class BindDnsSecKey {
 			fs.copyFileSync(src, this.options.keyFileName)
 
 		} else {
-			let cmd = `${this.options.rndcConfgenPath} -a -A hmac-sha512 -k '${this.options.keyname}' -c '${this.options.keyFileName}'`
+			let cmd = `${this.options.rndcConfgenPath} -a -A hmac-sha512 -k '${this.options.keyName}' -c '${this.options.keyFileName}'`
 			this.debug(`Running command ${cmd}`)
 			execSync(cmd)
 
