@@ -24,8 +24,8 @@ Run `docker build -t farberg/bind-dnssec-config .`
 
 `docker run --rm -ti farberg/bind-dnssec-config --entrypoint sh`
 
-TODOs:
-- Implement a real control loop to detect deleted zones that still have files lingering around
+TODOS
+- Reconciler should check for zones without proper status
 
 ## FAQ
 
@@ -40,3 +40,5 @@ kubectl create clusterrolebinding \
    --clusterrole=cluster-admin \
    --user=system:serviceaccount rds-admin-binding
 ```
+
+(only for development)
