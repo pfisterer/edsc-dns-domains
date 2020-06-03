@@ -46,6 +46,14 @@ module.exports = class BindConfigRunner extends EventEmitter {
 			this.bindProcess = null
 			this.emit('exit', code, signal)
 		})
+
+		this.bindProcess.stdout.on('data', (data) => {
+			this.logger.debug("Bind stdout:", data.toString());
+		});
+
+		this.bindProcess.stderr.on('data', (data) => {
+			this.logger.debug("Bind stderr:", data.toString());
+		});
 	}
 
 	ready() {
