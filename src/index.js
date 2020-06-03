@@ -16,7 +16,8 @@ const dummyCrdGen = require('./dummy-crd-gen')
 const options = optionparser
   .storeOptionsAsProperties(true)
   .option('-v, --verbose', "Display verbose output", false)
-  .option('--dryrun', "Do not actually write configuration files", "")
+  .option('--dryrun', "Do not actually run bind", false)
+  .option('--debug-create-crds <interval>', "Create random CRs for debugging", -1)
   .option('--configdir <path>', "The directory where to write the configuration to", "/tmp")
   .option('--crddef <path>', "Path to custom resource defs(CRDs) to use", path.join(__dirname, "./crd-defs"))
   .option('--namespace <namespace>', "Namespace to use", "default")
@@ -56,11 +57,16 @@ async function startBindConfigGenerator(options, logger) {
   return new BindConfigGen({
     configdir: options.configdir,
     dryrun: options.dryrun,
+    rndcConfgenPath: options.rndcconfgenpath,
     logger
   })
 }
 
 async function startBindProcessRunner(options, logger) {
+  if (typeof options.bindextraargs === "string") {
+    options.bindextraargs = options.bindextraargs.split(" ")
+  }
+
   let bindProcessRunner = new BindProcessRunner({
     bindbinary: options.bindbinary,
     configdir: options.configdir,
@@ -96,8 +102,8 @@ async function main(options) {
   const reconciler = await startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, options.reconcileInterval, getLogger("Reconciler"));
   const healthEndpoint = await startHealthEndpoint(bindProcessRunner, options, getLogger("HealthEndpoint"))
 
-  if (options.dryrun) {
-    let interval = 20000
+  if (options.debugCreateCrds > 0) {
+    let interval = options.debugCreateCrds
 
     dummyCrdGen(crdWatcher.getCustomObjectsApi(), interval,
       crdWatcher.crdGroup, crdWatcher.crdVersions[0].name,
