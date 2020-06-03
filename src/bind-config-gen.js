@@ -18,6 +18,7 @@ module.exports = class BindConfigUpdater {
 	constructor(options) {
 		this.options = options
 		this.configDir = options.configdir
+		this.rndcConfgenPath = options.rndcConfgenPath
 		this.logger = options.logger
 	}
 
@@ -131,7 +132,8 @@ options {
 			keyFileName: this.bindKeyFileName(spec),
 			keyName: spec.domainName,
 			logger: this.logger,
-			dryrun: this.options.dryrun
+			dryrun: this.options.dryrun,
+			rndcConfgenPath: this.rndcConfgenPath
 		})
 
 		let genResult = keyGen.getKey();
