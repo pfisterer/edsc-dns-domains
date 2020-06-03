@@ -7,11 +7,13 @@ module.exports = class BindConfigRunner extends EventEmitter {
 		super()
 		this.binaryPath = options.bindbinary
 		this.configDir = options.configdir
-		this.extraArgs = options.bindextraargs || ""
+		this.extraArgs = options.bindextraargs || [""]
 		this.dryRun = options.dryrun || false
 		this.logger = options.logger
 
-		this.defaultArgs = ['-g', '-u', 'named', '-c', `${this.configDir}/named.conf`]
+		this.defaultArgs = ['-g', // Run the server in the foreground and force all logging to stderr.
+			'-u', 'named',
+			'-c', `${this.configDir}/named.conf`]
 	}
 
 	restart() {
