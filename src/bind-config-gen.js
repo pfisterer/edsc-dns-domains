@@ -115,9 +115,9 @@ options {
 	// Changing this is NOT RECOMMENDED; see the notes above and in named.conf.recursive.
 	allow-recursion { none; };
 	recursion no;
-
-	include "${this.bindConfLocalFileName()}"
 };
+
+include "${this.bindConfLocalFileName()}";
 `
 		let changed = this.conditionalUpdateDest(namedConf, this.namedConfName());
 		return { changed: changed };
