@@ -80,7 +80,8 @@ module.exports = class CrdWatcher extends Operator {
 		}
 
 		let meta = ResourceMetaImpl.createWithPlural(this.crdPlural, cr);
-		return this.setResourceStatus(meta, status)
+
+		return await this.patchResourceStatus(meta, status)
 	}
 
 	async listItems() {
