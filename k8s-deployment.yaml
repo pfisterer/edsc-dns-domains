@@ -17,10 +17,8 @@ spec:
           image: farberg/bind-dnssec-config
           args:
             - "--configdir"
-            - "/etc/bind/"
+            - "/etc/bind"
             - "--verbose"
-            - "--bindextraargs"
-            - "-d 0"
             #- "--debug-create-crds"
             #- "10000"
           volumeMounts:
