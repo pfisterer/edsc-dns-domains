@@ -21,6 +21,8 @@ const options = optionparser
   .option('--configdir <path>', "The directory where to write the configuration to", "/tmp")
   .option('--crddef <path>', "Path to custom resource defs(CRDs) to use", path.join(__dirname, "./crd-defs"))
   .option('--namespace <namespace>', "Namespace to use", "default")
+  .option('--nameserver1 <name1>', "The 1st external name of this nameserver", "ns1.example.com")
+  .option('--nameserver2 <name1>', "The 2nd external name of this nameserver", "ns2.example.com")
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
