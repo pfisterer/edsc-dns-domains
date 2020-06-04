@@ -7,7 +7,7 @@ module.exports = class BindConfigRunner extends EventEmitter {
 		super()
 		this.binaryPath = options.bindbinary
 		this.configDir = options.configdir
-		this.extraArgs = options.bindextraargs || [""]
+		this.extraArgs = options.bindextraargs || []
 		this.dryRun = options.dryrun || false
 		this.logger = options.logger
 

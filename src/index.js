@@ -23,10 +23,10 @@ const options = optionparser
   .option('--namespace <namespace>', "Namespace to use", "default")
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
   .option('--bindbinary <path>', "Path to named binary", "/usr/sbin/named")
-  .option('--bindextraargs <extragargs>', "Extra args to pass to the bind binary", "")
+  .option('--bindextraargs <extragargs>', "Extra args to pass to the bind binary", [])
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
-  .version('0.0.1pre-alpha')
+  .version('0.0.2pre-alpha')
   .addHelpCommand()
   .parse()
   .opts()
@@ -103,6 +103,7 @@ async function main(options) {
   const healthEndpoint = await startHealthEndpoint(bindProcessRunner, options, getLogger("HealthEndpoint"))
 
   if (options.debugCreateCrds > 0) {
+    logger.info("Starting dummy generator")
     let interval = options.debugCreateCrds
 
     dummyCrdGen(crdWatcher.getCustomObjectsApi(), interval,

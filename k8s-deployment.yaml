@@ -17,10 +17,10 @@ spec:
           image: farberg/bind-dnssec-config
           args:
             - "--verbose"
-            #- "--bindextraargs"
-            #- "-d 1"
-            - "--debug-create-crds"
-            - "10000"
+            - "--bindextraargs"
+            - "-d 0"
+            #- "--debug-create-crds"
+            #- "10000"
             # - "--dryrun"
           ports:
             - containerPort: 7777
