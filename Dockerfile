@@ -2,9 +2,6 @@ FROM node:13-alpine
 
 LABEL maintainer="Dennis Pfisterer, http://www.dennis-pfisterer.de"
 
-# Install bind
-RUN apk --update add bind && addgroup -S bind && adduser -S bind -G bind
-
 # Install dnssec-keygen
 RUN apk add bind-dnssec-tools
 
@@ -23,8 +20,6 @@ COPY test/ /app/test
 
 RUN npm run build
 
-# UDP and TCP for DNS
-EXPOSE 53
 # Healthz
 EXPOSE 7777 
 

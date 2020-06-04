@@ -1,9 +1,9 @@
 const Express = require('express')
 
 module.exports = class HealthEndpoint {
-	constructor(bindProcessRunner, logger) {
-		this.logger = logger
-		this.bindProcessRunner = bindProcessRunner
+	constructor(options) {
+		this.logger = options.logger("HealthEndpoint")
+		this.logger.debug("New instance with options: ", options);
 	}
 
 	start(port) {
@@ -28,10 +28,7 @@ module.exports = class HealthEndpoint {
 
 		this.app.get('/health/readiness', (req, res) => {
 			this.logger.debug("Readiness check");
-			if (this.bindProcessRunner.ready())
-				res.status(200).send("OK");
-			else
-				res.status(500).send("Internal Server Error");
+			res.status(200).send("OK");
 		});
 
 		this.app.listen(port)

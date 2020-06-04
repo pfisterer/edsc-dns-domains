@@ -13,34 +13,47 @@ spec:
         app: bind_dnssec_config
     spec:
       containers:
-        - name: nginx
+        - name: configgen
           image: farberg/bind-dnssec-config
           args:
+            - "--configdir"
+            - "/etc/bind/"
             - "--verbose"
             - "--bindextraargs"
             - "-d 0"
             #- "--debug-create-crds"
             #- "10000"
-            # - "--dryrun"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/bind/
           ports:
             - containerPort: 7777
+        #          livenessProbe:
+        #            httpGet:
+        #              path: /health/liveness
+        #              port: 7777
+        #            initialDelaySeconds: 5
+        #            periodSeconds: 30
+        #          readinessProbe:
+        #            httpGet:
+        #              path: /health/readiness
+        #              port: 7777
+        #            initialDelaySeconds: 5
+        #            periodSeconds: 30
+        #          resources:
+        #            limits:
+        #              cpu: ".1"
+        #              memory: "256Mi"
+        - name: bindrunner
+          image: farberg/bind-dnssec-runner
+          ports:
             - containerPort: 53
-#          livenessProbe:
-#            httpGet:
-#              path: /health/liveness
-#              port: 7777
-#            initialDelaySeconds: 5
-#            periodSeconds: 30
-#          readinessProbe:
-#            httpGet:
-#              path: /health/readiness
-#              port: 7777
-#            initialDelaySeconds: 5
-#            periodSeconds: 30
-#          resources:
-#            limits:
-#              cpu: ".1"
-#              memory: "256Mi"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/bind/
+      volumes:
+        - name: config-volume
+          emptyDir: {}
 
 ---
 apiVersion: v1

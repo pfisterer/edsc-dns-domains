@@ -5,8 +5,9 @@
 npm run build
 
 # Run
-nodemon src/index.js -- --verbose --dryrun
+npm run dryrun
 
+# Test
 kubectl apply -f test/example-record.yaml
 ```
 

@@ -1,10 +1,10 @@
 const path = require('path')
-var log4js = require('log4js')
+const fs = require('fs')
+const log4js = require('log4js')
 const { program: optionparser } = require('commander')
 
 const CrdWatcher = require('./crd-watcher')
 const BindConfigGen = require("./bind-config-gen")
-const BindProcessRunner = require("./bind-process-runner");
 const { Reconciler } = require("./reconciler");
 const HealthEndpoint = require("./health-endpoint");
 const dummyCrdGen = require('./dummy-crd-gen')
@@ -22,11 +22,9 @@ const options = optionparser
   .option('--crddef <path>', "Path to custom resource defs(CRDs) to use", path.join(__dirname, "./crd-defs"))
   .option('--namespace <namespace>', "Namespace to use", "default")
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
-  .option('--bindbinary <path>', "Path to named binary", "/usr/sbin/named")
-  .option('--bindextraargs <extragargs>', "Extra args to pass to the bind binary", [])
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
-  .version('0.0.2pre-alpha')
+  .version('0.0.3alpha')
   .addHelpCommand()
   .parse()
   .opts()
@@ -44,64 +42,38 @@ function getLogger(name) {
 }
 
 // ------------------------------------------------
-// Setup functions
+// Main
 // ------------------------------------------------
-
-async function startHealthEndpoint(bindProcessRunner, options, logger) {
-  const health = new HealthEndpoint(bindProcessRunner, logger)
-  health.start(options.healthendpoint)
-  return health;
-}
-
-async function startBindConfigGenerator(options, logger) {
-  return new BindConfigGen({
-    configdir: options.configdir,
-    dryrun: options.dryrun,
-    rndcConfgenPath: options.rndcconfgenpath,
-    logger
-  })
-}
-
-async function startBindProcessRunner(options, logger) {
-  if (typeof options.bindextraargs === "string") {
-    options.bindextraargs = options.bindextraargs.split(" ")
-  }
-
-  let bindProcessRunner = new BindProcessRunner({
-    bindbinary: options.bindbinary,
-    configdir: options.configdir,
-    bindextraargs: options.bindextraargs,
-    dryrun: options.dryrun,
-    logger
-  })
-
-  bindProcessRunner.restart();
-  return bindProcessRunner
-}
-
-async function startCrdWatcher(options, logger) {
-  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
-  const crdWatcher = new CrdWatcher(logger, crdFile, options.namespace)
-  await crdWatcher.start();
-
-  return crdWatcher;
-}
-
-async function startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, reconcileInterval, logger) {
-  return new Reconciler(crdWatcher, bindConfigGen, bindProcessRunner, reconcileInterval, logger)
-}
-
 
 async function main(options) {
   const logger = getLogger("main")
   logger.debug(`Starting with options`, options)
 
-  const bindConfigGen = await startBindConfigGenerator(options, getLogger("BindConfigGen"))
-  const bindProcessRunner = await startBindProcessRunner(options, getLogger("BindProcessRunner"))
-  const crdWatcher = await startCrdWatcher(options, getLogger("CrdWatcher"))
-  const reconciler = await startReconciler(crdWatcher, bindConfigGen, bindProcessRunner, options.reconcileInterval, getLogger("Reconciler"));
-  const healthEndpoint = await startHealthEndpoint(bindProcessRunner, options, getLogger("HealthEndpoint"))
+  //Create bind config generator
+  const bindConfigGen = new BindConfigGen(Object.assign({}, { logger: getLogger }, options))
 
+  //Create custom resource watcher
+  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
+  const crdWatcher = new CrdWatcher(Object.assign({}, { crdFile, logger: getLogger }, options))
+  await crdWatcher.start();
+
+  //Create reconciler
+  const reconciler = new Reconciler(Object.assign({}, {
+    logger: getLogger,
+    crdWatcher,
+    bindConfigGen,
+    bindRestartRequestCallback() {
+      const restartFilename = path.join(options.configdir, "bind-restart.requested");
+      logger.info(`Restarting bind requested, creating file ${restartFilename}`)
+      fs.closeSync(fs.openSync(restartFilename, 'w'));
+    }
+  }, options))
+
+  //Start health endpoint
+  const healthEndpoint = new HealthEndpoint(Object.assign({}, { logger: getLogger }, options))
+  healthEndpoint.start(options.healthendpoint)
+
+  //Create random CRs
   if (options.debugCreateCrds > 0) {
     logger.info("Starting dummy generator")
     let interval = options.debugCreateCrds
@@ -110,10 +82,12 @@ async function main(options) {
       crdWatcher.crdGroup, crdWatcher.crdVersions[0].name,
       options.namespace, crdWatcher.crdPlural, getLogger("dummyCrdGen"))
   }
-
 }
 
+// ------------------------------------------------
 // Start main method
+// ------------------------------------------------
+
 (async () => main(options)
   .then(() => console.log("Main done"))
   .catch(e => { console.log("Error in main: ", e); process.exit(1) })

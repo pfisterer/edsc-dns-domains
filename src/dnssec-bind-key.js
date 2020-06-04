@@ -7,13 +7,8 @@ const grammar = require("./bind-key-grammar");
 module.exports = class BindDnsSecKey {
 
 	constructor(options) {
-		this.options = Object.assign({}, {
-			dryrun: false,
-			rndcConfgenPath: null,
-			keyFileName: null,
-			keyName: null,
-			logger: null
-		}, options);
+		this.options = options;
+		this.logger = options.logger ? options.logger("BindDnsSecKey") : function () { console.log.apply(null, arguments) }
 
 		if (!options.keyFileName)
 			throw "options.keyFileName is missing"
@@ -21,47 +16,48 @@ module.exports = class BindDnsSecKey {
 		if (!options.keyName)
 			throw "options.keyName is missing"
 
-		if (!options.rndcConfgenPath)
-			throw "options.rndcConfgenPath is missing"
-	}
-
-	debug() {
-		if (this.options.logger)
-			this.options.logger.debug.apply(this.options.logger, arguments)
-		else
-			console.log.apply(null, arguments)
+		if (!options.rndcconfgenpath)
+			throw "options.rndcconfgenpath is missing"
 	}
 
 	getKey() {
-		let loadResult = this.loadKeyFile();
+		const loadResult = this.loadKeyFile();
 
-		if (loadResult)
+		if (loadResult) {
+			this.logger.debug(`getKey: Loaded from ${this.options.keyFileName}`)
 			return Object.assign({}, { changed: false }, loadResult);
+		}
+
+		this.logger.debug(`getKey: Unable to load key from ${this.options.keyFileName}, generating a new one`)
 
 		this.generateNewKeyFile();
 
-		return Object.assign({}, { changed: true }, loadResult)
+		return Object.assign({}, { changed: true }, this.loadKeyFile())
 	}
 
 	generateNewKeyFile() {
 
 		if (this.options.dryrun) {
-			let src = path.join(__dirname, "../test/dnssec-example.key")
-			this.debug(`Dry-run, copying ${src} to ${this.options.keyFileName}`)
-			fs.copyFileSync(src, this.options.keyFileName)
+			this.logger.debug(`generateNewKeyFile: Dry-run, created dummy key at ${this.options.keyFileName}`)
+			fs.writeFileSync(this.options.keyFileName, `key "${this.options.keyName}" {
+	algorithm hmac-sha512;
+	secret "Fc7zMz2T5KrZjFY2kWbOkwyYOSTGHfu6r9LYTTQH1O64k2qs1k8ZcPVoj34E2AK/A+sHKquLaId89EM0xE8tew==";
+};
+`)
 
 		} else {
-			let cmd = `${this.options.rndcConfgenPath} -a -A hmac-sha512 -k '${this.options.keyName}' -c '${this.options.keyFileName}'`
-			this.debug(`Running command ${cmd}`)
+			//Run rndc-confgen
+			let cmd = `${this.options.rndcconfgenpath} -a -A hmac-sha512 -k '${this.options.keyName}' -c '${this.options.keyFileName}'`
+			this.logger.debug(`generateNewKeyFile: Running command ${cmd}`)
 			execSync(cmd)
-
 		}
+
 	}
 
 	loadKeyFile() {
 		// Verify the file exists
 		if (!fs.existsSync(this.options.keyFileName)) {
-			this.debug(`Key file ${this.options.keyFileName} does not exist, returning.`)
+			this.logger.debug(`loadKeyFile: Key file ${this.options.keyFileName} does not exist, returning.`)
 			return null;
 		}
 
@@ -81,14 +77,14 @@ module.exports = class BindDnsSecKey {
 			// Return data from parser results
 			return {
 				fileValid: true,
-				keyfilename: this.options.keyFileName,
-				keyname: parser.results[0].keyname,
-				algorithm: parser.results[0].algorithm,
-				secret: parser.results[0].secret,
+				keyFile: this.options.keyFileName,
+				keyName: parser.results[0].keyname,
+				dnssecAlgorithm: parser.results[0].algorithm,
+				dnssecKey: parser.results[0].secret,
 			}
 
 		} catch (e) {
-			this.debug(`Unable to parse key file ${this.options.keyFileName}, error=`, e)
+			this.logger.debug(`loadKeyFile: Unable to parse key file ${this.options.keyFileName}, error=`, e)
 			return null;
 		}
 

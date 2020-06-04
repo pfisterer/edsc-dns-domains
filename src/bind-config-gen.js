@@ -8,13 +8,15 @@ const BindDnsSecKey = require("../src/dnssec-bind-key")
 
 tmp.setGracefulCleanup({ unsafeCleanup: true });
 
-module.exports = class BindConfigUpdater {
+module.exports = class BindConfigGen {
 
 	constructor(options) {
 		this.options = options
 		this.configDir = options.configdir
-		this.rndcConfgenPath = options.rndcConfgenPath
-		this.logger = options.logger
+		this.rndcconfgenpath = options.rndcconfgenpath
+		this.logger = options.logger("BindConfigGen")
+
+		this.logger.debug("New instance with options: ", options);
 	}
 
 	// -------------------------------------------------------------------
@@ -24,25 +26,23 @@ module.exports = class BindConfigUpdater {
 	namedConfName() {
 		return this.configDir + "/named.conf"
 	}
-	bindConfLocalFileName() {
-		return this.configDir + "/named.conf.local";
-	}
 	generatedFilesDir() {
 		return this.configDir + "/gen/"
 	}
-
 	bindKeyFileName(spec) {
 		return this.generatedFilesDir() + spec.domainName + ".key";
 	}
 	bindZoneFileName(spec) {
 		return this.generatedFilesDir() + spec.domainName + ".db";
 	}
-
 	bindConfigFileName(spec) {
 		return this.generatedFilesDir() + spec.domainName + ".conf";
 	}
 	zoneNameFromBindConfigFileName(filename) {
 		return path.basename(filename, '.conf')
+	}
+	ensureConfigPathsExist() {
+		fs.mkdirSync(this.generatedFilesDir(), { recursive: true })
 	}
 
 	validateString(data) {
@@ -66,16 +66,21 @@ module.exports = class BindConfigUpdater {
 	}
 
 	validateZone(spec) {
-		//From https://regexr.com/3au3g
-		const validDomainRegexp = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/gi;
+		//Validate domain name exists
+		if (!this.validateString(spec.domainName))
+			return { error: `Invalid string field 'spec.domainName' in spec ${JSON.stringify(spec)}` }
 
+		//Validate domain name (from https://regexr.com/3au3g)
+		const validDomainRegexp = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/gi;
 		if (!spec.domainName.match(validDomainRegexp))
 			return { error: `Not adding/updating invalid domain name ${spec.domainName} in spec ${JSON.stringify(spec)}` }
 
+		//Validate string fields
 		for (const field of ["adminContact"])
 			if (!this.validateString(spec[field]))
 				return { error: `Invalid string field ${field} of ${spec.domainName}: ${spec[field]} in spec ${JSON.stringify(spec)}` }
 
+		//Validate int fields
 		for (const field of ["ttlSeconds", "refreshSeconds", "retrySeconds", "expireSeconds", "minimumSeconds"])
 			if (!this.validateNonNegInt(spec[field]))
 				return { error: `Invalid int field ${field} of ${spec.domainName}: ${spec[field]} in spec ${JSON.stringify(spec)}` }
@@ -83,12 +88,8 @@ module.exports = class BindConfigUpdater {
 		return {}
 	}
 
-	ensureConfigPathsExist() {
-		fs.mkdirSync(this.generatedFilesDir(), { recursive: true })
-	}
-
 	conditionalUpdateDest(content, destFile, modifyCallbackBeforeHash) {
-		this.logger.debug(`Checking whether ${destFile} needs to be updated`)
+		this.logger.debug(`conditionalUpdateDest: Checking whether ${destFile} needs to be updated`)
 
 		let hash = (str) => {
 			// Invoke a modify callback before hashing (e.g., to remove permanently changing fields)
@@ -108,12 +109,12 @@ module.exports = class BindConfigUpdater {
 		let contentHash = hash(content)
 
 		if (destFileHash !== contentHash) {
-			this.logger.debug(`Updating ${destFile} with new content: ${content}`)
+			this.logger.debug(`conditionalUpdateDest: Updating ${destFile} with new content: ${content}`)
 			fs.writeFileSync(destFile, content)
 			return true;
 		}
 
-		this.logger.debug(`Not updating ${destFile} since it would be unchanged`)
+		this.logger.debug(`conditionalUpdateDest: Not updating ${destFile} since it would be unchanged`)
 		return false;
 	}
 
@@ -122,6 +123,13 @@ module.exports = class BindConfigUpdater {
 	// -------------------------------------------------------------------
 
 	generateNamedConf() {
+
+		// Iterate all config files and generate include "filename"; configs
+		let includes = glob
+			.sync(this.generatedFilesDir() + '*.conf')
+			.map(el => `include "${el}";\n`)
+			.sort()
+			.reduce((a, b) => a + b, "")
 
 		let namedConf = `
 options {
@@ -142,34 +150,35 @@ options {
 	recursion no;
 };
 
-include "${this.bindConfLocalFileName()}";
+${includes}
 `
 		let changed = this.conditionalUpdateDest(namedConf, this.namedConfName());
 		return { changed: changed };
 	}
 
 	// -------------------------------------------------------------------
+	// Get all existing zones
+	// -------------------------------------------------------------------
+
+	async getZones() {
+		// Iterate all config files and generate include "filename"; configs
+		const configs = await globpromise(this.generatedFilesDir() + '*.conf')
+		return configs.map(el => this.zoneNameFromBindConfigFileName(el))
+	}
+
+
+	// -------------------------------------------------------------------
 	// DNSSEC keygen
 	// -------------------------------------------------------------------
 
 	getOrGenerateKey(spec) {
-		let keyGen = new BindDnsSecKey({
-			keyFileName: this.bindKeyFileName(spec),
-			keyName: spec.domainName,
-			logger: this.logger,
-			dryrun: this.options.dryrun,
-			rndcConfgenPath: this.rndcConfgenPath
-		})
+		const key = new BindDnsSecKey(
+			Object.assign({}, {
+				keyFileName: this.bindKeyFileName(spec),
+				keyName: spec.domainName
+			}, this.options))
 
-		let genResult = keyGen.getKey();
-
-		return {
-			changed: genResult.changed,
-			keyFile: genResult.keyfilename,
-			keyName: genResult.keyname,
-			dnssecKey: genResult.secret,
-			dnssecAlgorithm: genResult.algorithm
-		};
+		return Object.assign({ changed: true }, key.getKey())
 	}
 
 	// -------------------------------------------------------------------
@@ -216,31 +225,6 @@ NS	${spec.domainName}.
 	}
 
 	// -------------------------------------------------------------------
-	// named.conf.local
-	// -------------------------------------------------------------------
-
-	updateNamedConfLocal() {
-
-		// Iterate all config files and generate include "filename"; configs
-		let config = glob
-			.sync(this.generatedFilesDir() + '*.conf')
-			.map(el => `include "${el}";\n`)
-			.sort()
-			.reduce((a, b) => a + b, "")
-
-		// Write changed config file only
-		let changed = this.conditionalUpdateDest(config, this.bindConfLocalFileName());
-
-		return { changed: changed }
-	}
-
-	async getZones() {
-		// Iterate all config files and generate include "filename"; configs
-		const configs = await globpromise(this.generatedFilesDir() + '*.conf')
-		return configs.map(el => this.zoneNameFromBindConfigFileName(el))
-	}
-
-	// -------------------------------------------------------------------
 	// Main management functionality
 	// -------------------------------------------------------------------
 
@@ -259,30 +243,33 @@ NS	${spec.domainName}.
 		 }
 		 */
 	addOrUpdateZone(spec) {
-		this.logger.debug("Starting to process zone", spec.domainName)
+		this.logger.debug("addOrUpdateZone: Starting to process zone", spec.domainName)
 
+		//Validate input
 		let validationResult = this.validateZone(spec)
 		if (validationResult.error) {
-			this.logger.error("Not processing zone due to error:", validationResult.error)
+			this.logger.error("addOrUpdateZone: Not processing zone due to error:", validationResult.error)
 			return { changed: false, status: { "Error": validationResult.error } }
 		}
 
+		//Create config path
 		this.ensureConfigPathsExist();
 
+		//Update configuration
 		let { changed: namedConfChanged } = this.generateNamedConf()
-		let { changed: isNewKey, keyFile, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec)
+		let { changed: keyChanged, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec)
 		let { changed: configChanged, zoneFile } = this.getOrCreateBindConfigFile(spec, keyName)
 		let { changed: zoneFileChanged } = this.getOrCreateZoneFile(spec, zoneFile)
-		let { changed: namedConfLocalChanged } = this.updateNamedConfLocal()
 
-		let changed = isNewKey || configChanged || zoneFileChanged || namedConfChanged || namedConfLocalChanged;
+		this.logger.debug(`addOrUpdateZone: Done processing zone `, spec.domainName, ` (changes: Key: ${keyChanged} || Config: ${configChanged} || Zonefile: ${zoneFileChanged} || Named.conf: ${namedConfChanged}`)
+
+		//Check result
+		let changed = keyChanged || configChanged || zoneFileChanged || namedConfChanged;
 		let status = { keyName, dnssecKey, dnssecAlgorithm }
 
-		this.logger.debug(`Done processing zone `, spec.domainName, ` (changes: isNewKey: ${isNewKey} || configChanged: ${configChanged} || zoneFileChanged: ${zoneFileChanged} || namedConfChanged: ${namedConfChanged}  || namedConfLocalChanged: ${namedConfLocalChanged})`)
-
 		if (changed) {
-			this.logger.info(`Zone ${spec.domainName} has changed`)
-			this.logger.debug(`Returning status object: ${JSON.stringify(status, null, 3)}`)
+			this.logger.info(`addOrUpdateZone: Zone ${spec.domainName} has changed`)
+			this.logger.debug(`addOrUpdateZone: Returning updated status object: ${JSON.stringify(status, null, 3)}`)
 		}
 
 		return { changed, status };
@@ -291,27 +278,21 @@ NS	${spec.domainName}.
 	deleteZone(spec) {
 		let validationResult = this.validateZone(spec)
 		if (validationResult.error) {
-			this.logger.error("Not processing zone due to error:", validationResult.error)
+			this.logger.error("deleteZone: Not processing zone due to error:", validationResult.error)
 			return { changed: false, error: validationResult.error }
 		}
 
-		this.logger.debug(`Deleting zone`, spec)
+		this.logger.debug(`deleteZone: Deleting zone`, spec)
 
 		const filesToDelete = [this.bindKeyFileName(spec), this.bindConfigFileName(spec), this.bindZoneFileName(spec)]
 
 		for (const f of filesToDelete) {
-			this.logger.debug(`Deleting file for zone ${spec.domainName}`, f)
+			this.logger.debug(`deleteZone: Deleting file for zone ${spec.domainName}`, f)
 			fs.unlinkSync(f);
 		}
 
-		let { changed: namedConfChanged } = this.generateNamedConf()
-		let { changed: namedConfLocalChanged } = this.updateNamedConfLocal()
-		let changed = namedConfChanged || namedConfLocalChanged;
-
-		this.logger.debug(`Done deleting zone `, spec.domainName, ` (changes: namedConfChanged: ${namedConfChanged}  || namedConfLocalChanged: ${namedConfLocalChanged})`)
-
-		if (changed)
-			this.logger.info(`Config has changed`)
+		let { changed } = this.generateNamedConf()
+		this.logger.debug(`deleteZone: Done deleting zone `, spec.domainName, ` (changes: Named.conf: ${changed})`)
 
 		return { changed }
 	}
