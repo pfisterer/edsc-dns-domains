@@ -1,4 +1,18 @@
 const { fixed: { setIntervalAsync: setIntervalAsync }, clearIntervalAsync } = require('set-interval-async')
+const { diff } = require("deep-object-diff")
+
+function getDifferingFieldNames(o1, o2) {
+	if (!o1 && !o2)
+		return []
+
+	if (!o1 && o2)
+		return Object.getOwnPropertyNames(o2)
+
+	if (!o2 && o1)
+		return Object.getOwnPropertyNames(o1)
+
+	return Object.getOwnPropertyNames(diff(o1, o2))
+}
 
 class ReconcilerData {
 	constructor(crds, zones) {
@@ -61,11 +75,10 @@ class Reconciler {
 
 		// Setup new timer
 		this.reconcileTimer = setIntervalAsync(async () => {
-			this.logger.debug(`setupReconcileTimer: Running reconcile from timer`)
+			//this.logger.debug(`setupReconcileTimer: Running reconcile from timer`)
 			await this.reconcile();
 		}, this.reconcileInterval)
 	}
-
 
 	async add(cr) {
 		let spec = cr.spec
@@ -78,8 +91,21 @@ class Reconciler {
 			this.bindRestartRequested = true;
 		}
 
-		if (result.status) {
-			await this.crdWatcher.updateResourceStatus(cr, result.status)
+		const changedStatusFields = getDifferingFieldNames(cr.status, result.status);
+		if (changedStatusFields.length > 0) {
+			let statusPatch = {}
+			for (let field of changedStatusFields) {
+				statusPatch[field] = result.status[field]
+			}
+
+			try {
+				this.logger.warn(`add: Patching status of zone: ${spec.domainName}: old   = `, cr.status)
+				this.logger.warn(`add: Patching status of zone: ${spec.domainName}: new   = `, result.status)
+				this.logger.warn(`add: Patching status of zone: ${spec.domainName}: patch = `, statusPatch)
+				await this.crdWatcher.updateResourceStatus(cr, statusPatch)
+			} catch (e) {
+				this.logger.warn(`add: Patching status of custom resource (zone: ${spec.domainName}) failed: `, e)
+			}
 		}
 
 		return result
@@ -112,7 +138,7 @@ class Reconciler {
 
 			for (const field of ["dnssecAlgorithm", "dnssecKey", "keyName"]) {
 				if (!crd.status[field]) {
-					this.logger.debug(`getZonesWithoutProperStatus: Zone ${crd.spec.domainName} does not have a status`)
+					this.logger.debug(`getZonesWithoutProperStatus: Status of zone ${crd.spec.domainName} is missing status field ${field}`)
 					zones.push(crd.spec.domainName)
 				}
 			}
@@ -153,7 +179,6 @@ class Reconciler {
 
 		//Zone that have no proper status -> forcefully recreate them
 		const zonesWithoutProperStatus = this.getZonesWithoutProperStatus(customResources)
-		this.logger.debug("reconcile: Zones that have no proper status: ", zonesWithoutProperStatus)
 		for (const name of zonesWithoutProperStatus) {
 			this.logger.warn(`reconcile: Forcefully re-running zone ${name} because no proper status exists`)
 			this.add(getCrForName(name, customResources))
