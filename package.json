@@ -18,6 +18,7 @@
   "dependencies": {
     "@dot-i/k8s-operator": "^1.0.3",
     "commander": "^5.1.0",
+    "deep-object-diff": "^1.1.0",
     "express": "^4.17.1",
     "glob": "^7.1.6",
     "glob-promise": "^3.4.0",
