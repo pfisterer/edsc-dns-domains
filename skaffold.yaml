@@ -12,4 +12,4 @@ build:
 deploy:
   kubectl:
     manifests:
-      - k8s-deployment.yaml
+      - k8s/k8s-deployment.yaml
