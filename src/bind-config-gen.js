@@ -269,7 +269,6 @@ NS	${spec.domainName}.
 
 		if (changed) {
 			this.logger.info(`addOrUpdateZone: Zone ${spec.domainName} has changed`)
-			this.logger.debug(`addOrUpdateZone: Returning updated status object: ${JSON.stringify(status, null, 3)}`)
 		}
 
 		return { changed, status };
