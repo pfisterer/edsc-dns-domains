@@ -3,7 +3,7 @@ FROM node:13-alpine
 LABEL maintainer="Dennis Pfisterer, http://www.dennis-pfisterer.de"
 
 # Install dnssec-keygen
-RUN apk add bind-dnssec-tools
+RUN apk add bind
 
 # set our node environment, either development or production
 ARG NODE_ENV=production
