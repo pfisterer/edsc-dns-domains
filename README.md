@@ -47,7 +47,9 @@ status:
   keyName: my.example.domain.com
 ```
 
-## Run locally
+## Running and Development
+
+### Run locally
 
 ```bash
 npm install # Install required modules
@@ -56,15 +58,15 @@ npm run dryrun # Run a local dry-run
 kubectl apply -f test/example-record.yaml # Add a custom resource
 ```
 
-## Develop using [Skaffold](https://skaffold.dev/)
+### Develop using [Skaffold](https://skaffold.dev/)
 
 Make sure kubernetes is running and available and then run `skaffold dev`
 
-## Deploy to Kubernetes
+### Deploy to Kubernetes
 
 Create a deployment similar to [this one](k8s/k8s-deployment.yaml) and deploy it using `kubectl apply -f your-filename.yaml`.
 
-# Build the Docker container
+### Build the Docker container
 
 Run `docker build -t farberg/bind-dnssec-config .`
 
