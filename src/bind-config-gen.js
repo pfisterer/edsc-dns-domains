@@ -208,14 +208,16 @@ ${includes}
 		// Generate config contents
 		let config = `$ORIGIN .
 $TTL ${spec.ttlSeconds}; 1 minute
-${spec.domainName} IN SOA	${spec.domainName}.${spec.adminContact} (
+${spec.domainName} IN SOA ${this.options.nameserver1}. ${spec.adminContact}. (
 	${Math.round(Date.now() / 6000)}; serial
-	${spec.refreshSeconds}; refresh(1 minute)
-	${spec.retrySeconds}; retry(1 minute)
-	${spec.expireSeconds}; expire(10 minutes)
-	${spec.minimumSeconds}; minimum(1 minute)
+	${spec.refreshSeconds}; refresh
+	${spec.retrySeconds}; retry
+	${spec.expireSeconds}; expire
+	${spec.minimumSeconds}; minimum
 )
-NS	${spec.domainName}.
+;
+	NS	${this.options.nameserver1}.
+	NS	${this.options.nameserver2}.
 `
 		// Write config to file
 		let changed = this.conditionalUpdateDest(config, zoneFile,
