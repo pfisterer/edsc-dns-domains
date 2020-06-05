@@ -78,6 +78,7 @@ Run `docker build -t farberg/bind-dnssec-config .`
 ## Todos
 
 - Reconciler: Periodically call add for a zone to verify its status (add a lastUpdateField to status and define a max age)
+- Reconciler: Call `runQueues` more often than the reconciler to dispatch events earlier
 
 ## FAQ
 
