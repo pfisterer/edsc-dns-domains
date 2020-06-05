@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "compile_grammar": "npx nearleyc src/bind-key-grammar.ne --out src/bind-key-grammar.js",
-    "test_grammar": "cat test/dnssec-example.key | npx nearley-test src/bind-key-grammar.js",
+    "compile_grammar": "npx nearleyc src/bind/bind-key-grammar.ne --out src/bind/bind-key-grammar.js",
+    "test_grammar": "cat test/dnssec-example.key | npx nearley-test src/bind/bind-key-grammar.js",
     "build": "npm run compile_grammar",
     "dryrun": "nodemon --exec 'clear ; node --trace-uncaught src/index.js --verbose --dryrun'",
     "deploy": "skaffold build -q | skaffold deploy --build-artifacts -"
