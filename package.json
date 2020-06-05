@@ -8,7 +8,8 @@
     "compile_grammar": "npx nearleyc src/bind-key-grammar.ne --out src/bind-key-grammar.js",
     "test_grammar": "cat test/dnssec-example.key | npx nearley-test src/bind-key-grammar.js",
     "build": "npm run compile_grammar",
-    "dryrun": "nodemon --exec 'clear ; node --trace-uncaught src/index.js --verbose --dryrun'"
+    "dryrun": "nodemon --exec 'clear ; node --trace-uncaught src/index.js --verbose --dryrun'",
+    "deploy": "skaffold build -q | skaffold deploy --build-artifacts -"
   },
   "author": "",
   "license": "ISC",
@@ -22,10 +23,12 @@
     "express": "^4.17.1",
     "glob": "^7.1.6",
     "glob-promise": "^3.4.0",
+    "is-valid-domain": "0.0.14",
     "kubernetes-client": "^9.0.0",
     "lodash": "^4.17.15",
     "log4js": "^6.2.1",
     "nearley": "^2.19.3",
+    "parse-domain": "^3.0.2",
     "rimraf": "^3.0.2",
     "set-interval-async": "^1.0.32",
     "tmp": "^0.2.1"
