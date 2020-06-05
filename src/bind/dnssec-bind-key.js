@@ -24,7 +24,7 @@ module.exports = class BindDnsSecKey {
 		const loadResult = this.loadKeyFile();
 
 		if (loadResult) {
-			this.logger.debug(`getKey: Loaded from ${this.options.keyFileName}`)
+			this.logger.debug(`getKey: Loaded from ${this.options.keyFileName}, key=${loadResult.dnssecKey}`)
 			return Object.assign({}, { changed: false }, loadResult);
 		}
 

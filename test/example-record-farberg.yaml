@@ -1,0 +1,13 @@
+apiVersion: dnsseczone.farberg.de/v1
+kind: DnssecZone
+metadata:
+  name: bla
+  namespace: default
+spec:
+  domainName: "test.e.farberg.de"
+  adminContact: "admin.edsc.cloud"
+  ttlSeconds: 60
+  refreshSeconds: 60
+  retrySeconds: 60
+  expireSeconds: 600
+  minimumSeconds: 60

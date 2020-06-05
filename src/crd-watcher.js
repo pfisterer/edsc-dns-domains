@@ -8,12 +8,12 @@ module.exports = class CrdWatcher extends Operator {
 		super(options.logger("Operator"));
 
 		this.crdFile = options.crdFile;
-		this.logger = options.logger("CrdWatcher");
+		this.log = options.logger("CrdWatcher");
 		this.namespace = options.namespace
 
 		this.events = new EventEmitter();
 
-		this.logger.debug("constructor: New instance with options: ", options);
+		this.log.debug("constructor: New instance with options: ", options);
 	}
 
 	async init() {
@@ -23,27 +23,27 @@ module.exports = class CrdWatcher extends Operator {
 		this.crdVersions = versions;
 		this.crdPlural = plural;
 
-		this.logger.debug(`init: Watching group ${group}, versions[0].name ${versions[0].name}, plural ${plural}`)
+		this.log.debug(`init: Watching group ${group}, versions[0].name ${versions[0].name}, plural ${plural}`)
 
 		let watcher = async (event) => {
 			try {
 				if (event.type === ResourceEventType.Added) {
-					this.logger.debug("watcher: Resource added", event.object.metadata.name)
+					this.log.debug("watcher: Resource added", event.object.metadata.name)
 					this.events.emit("added", event)
 
 				} else if (event.type === ResourceEventType.Modified) {
-					this.logger.debug("watcher: Resource modified", event.object.metadata.name)
+					this.log.debug("watcher: Resource modified", event.object.metadata.name)
 					this.events.emit("modified", event)
 
 				} else if (event.type === ResourceEventType.Deleted) {
-					this.logger.debug("watcher: Resource deleted", event.object.metadata.name)
+					this.log.debug("watcher: Resource deleted", event.object.metadata.name)
 					this.events.emit("deleted", event)
 
 				} else {
-					this.logger.warn(`watcher: Unknown event type: ${e.type} of event `, e)
+					this.log.warn(`watcher: Unknown event type: ${e.type} of event `, e)
 				}
 			} catch (err) {
-				this.logger.warn(`watcher: Error in watch resource:`, err)
+				this.log.warn(`watcher: Error in watch resource:`, err)
 			}
 		}
 
@@ -55,7 +55,7 @@ module.exports = class CrdWatcher extends Operator {
 	}
 
 	async updateResourceStatus(cr, status) {
-		this.logger.debug(`updateResourceStatus: Setting status of ${cr.spec.domainName} to `, status)
+		//this.log.debug(`updateResourceStatus: Updating status of ${cr.spec.domainName} to `, status)
 
 		//copied from node_modules/@dot-i/k8s-operator/dist/operator.js since it is not exported
 		class ResourceMetaImpl {

@@ -84,27 +84,28 @@ class Reconciler {
 		let spec = cr.spec
 		let result = this.bindConfigGen.addOrUpdateZone(spec)
 
-		this.logger.debug(`add: Result of running addOrUpdateZone for zone ${spec.domainName}:`, result);
-
 		if (result.changed) {
+			this.logger.debug(`add: Result of addOrUpdateZone for zone ${spec.domainName}:`, result);
 			this.logger.debug("add: Requesting bind restart due to changes to zone", spec.domainName)
 			this.bindRestartRequested = true;
+		} else {
+			this.logger.debug(`add: zone ${spec.domainName} is unchanged`);
 		}
 
-		const changedStatusFields = getDifferingFieldNames(cr.status, result.status);
+		const changedStatusFields = getDifferingFieldNames(result.status, cr.status);
 		if (changedStatusFields.length > 0) {
 			let statusPatch = {}
 			for (let field of changedStatusFields) {
+				this.logger.debug(`${spec.domainName}, ${field} changed from ${cr.status ? cr.status[field] : "<nonexistent>"} to ${result.status[field]}`)
 				statusPatch[field] = result.status[field]
 			}
 
 			try {
-				this.logger.warn(`add: Patching status of zone: ${spec.domainName}: old   = `, cr.status)
-				this.logger.warn(`add: Patching status of zone: ${spec.domainName}: new   = `, result.status)
-				this.logger.warn(`add: Patching status of zone: ${spec.domainName}: patch = `, statusPatch)
-				await this.crdWatcher.updateResourceStatus(cr, statusPatch)
+				this.logger.debug(`add: Patching status of zone: ${spec.domainName}: patch = `, statusPatch)
+				let result = await this.crdWatcher.updateResourceStatus(cr, statusPatch)
+				this.logger.debug(`add: Patching result =`, result)
 			} catch (e) {
-				this.logger.warn(`add: Patching status of custom resource (zone: ${spec.domainName}) failed: `, e)
+				this.logger.warn(`add: Error while patching status of custom resource (zone: ${spec.domainName}): `, e)
 			}
 		}
 
@@ -129,20 +130,20 @@ class Reconciler {
 		let zones = []
 
 		for (let crd of crds) {
-
+			//Check if a status exists
 			if (!crd.status) {
 				this.logger.debug(`getZonesWithoutProperStatus: Zone ${crd.spec.domainName} does not have a status`)
 				zones.push(crd.spec.domainName)
 				continue
 			}
 
+			//Check that certain fields are present
 			for (const field of ["dnssecAlgorithm", "dnssecKey", "keyName"]) {
 				if (!crd.status[field]) {
 					this.logger.debug(`getZonesWithoutProperStatus: Status of zone ${crd.spec.domainName} is missing status field ${field}`)
 					zones.push(crd.spec.domainName)
 				}
 			}
-
 		}
 
 		// Remove duplicate entries and return as array
@@ -168,7 +169,7 @@ class Reconciler {
 		// Zones that exist in bind but no matching CR exists in K8s
 		for (const name of data.getDispensableZones()) {
 			this.logger.debug(`reconcile: Deleting disposable zone = `, name)
-			this.remove(getCrForName(name, customResources))
+			this.remove({ "spec": { "domainName": name } })
 		}
 
 		// Zones that are missing in Bind's config files
