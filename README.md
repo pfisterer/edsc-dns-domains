@@ -64,11 +64,20 @@ Make sure kubernetes is running and available and then run `skaffold dev`
 
 ### Deploy to Kubernetes
 
-Create a deployment similar to [this one](k8s/k8s-deployment.yaml) and deploy it using `kubectl apply -f your-filename.yaml`.
+Option 1: Manual deployment
+- Create a deployment similar to [this one](k8s/k8s-deployment.yaml)
+- Deploy it using `kubectl apply -f your-filename.yaml`.
+
+Option 2: Use Skaffold
+- Run `npm run deploy`
 
 ### Build the Docker container
 
 Run `docker build -t farberg/bind-dnssec-config .`
+
+## Todos
+
+- Reconciler: Periodically call add for a zone to verify its status (add a lastUpdateField to status and define a max age)
 
 ## FAQ
 
