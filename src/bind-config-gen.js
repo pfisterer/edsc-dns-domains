@@ -14,15 +14,12 @@ module.exports = class BindConfigGen {
 
 	constructor(options) {
 		this.options = options
-		this.configDir = options.configdir
-		this.rndcconfgenpath = options.rndcconfgenpath
 		this.logger = options.logger("BindConfigGen")
+		this.conditionalUpdateDest = condUpdate(this.logger)
 
 		this.logger.debug("New instance with options: ", options);
 
-		//Create config path
 		this.ensureConfigPathsExist();
-		this.conditionalUpdateDest = condUpdate(this.logger)
 	}
 
 	// -------------------------------------------------------------------
@@ -30,25 +27,25 @@ module.exports = class BindConfigGen {
 	// -------------------------------------------------------------------
 
 	namedConfName() {
-		return this.configDir + "/named.conf"
+		return path.join(this.options.configdir, "named.conf")
 	}
 	generatedFilesDir() {
-		return this.configDir + "/gen/"
+		return path.join(this.options.configdir, "gen")
 	}
 	bindKeyFileName(spec) {
-		return this.generatedFilesDir() + spec.domainName + ".key";
+		return path.join(this.generatedFilesDir(), spec.domainName + ".key")
 	}
 	bindZoneFileName(spec) {
-		return this.generatedFilesDir() + spec.domainName + ".db";
+		return path.join(this.options.vardir, spec.domainName + ".db")
 	}
 	bindConfigFileName(spec) {
-		return this.generatedFilesDir() + spec.domainName + ".conf";
+		return path.join(this.generatedFilesDir(), spec.domainName + ".conf")
 	}
 	zoneNameFromBindConfigFileName(filename) {
 		return path.basename(filename, '.conf')
 	}
 	globPatternZones() {
-		return this.generatedFilesDir() + '*.conf';
+		return this.generatedFilesDir() + '/*.conf';
 	}
 	async getZones() {
 		// Iterate all config files and generate include "filename"; configs
@@ -123,21 +120,6 @@ module.exports = class BindConfigGen {
 
 		return { "changed": zoneSpecChanged || zoneFileChanged, "confFile": confFileName, "zoneFile": zoneFileName };
 	}
-
-	// -------------------------------------------------------------------
-	// XXXXXXXXXXXXXXXXXX
-	// -------------------------------------------------------------------
-	getRequiredSuperDomains(domain) {
-		//Split domain in parts
-		const split = domain.split(".")
-		//Get and remove tld
-		const { topLevelDomains } = parseDomain(domain)
-		const d_wo_tld = split.slice(0, split.length - topLevelDomains.length)
-		//Remove hostname
-		return d_wo_tld.slice(1)
-	}
-
-	// TODO: Generate zones pointing to this nameserver for all getRequiredSuperDomains
 
 	// -------------------------------------------------------------------
 	// Main management functionality

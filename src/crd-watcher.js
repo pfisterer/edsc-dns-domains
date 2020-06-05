@@ -27,21 +27,7 @@ module.exports = class CrdWatcher extends Operator {
 
 		let watcher = async (event) => {
 			try {
-				if (event.type === ResourceEventType.Added) {
-					this.log.debug("watcher: Resource added", event.object.metadata.name)
-					this.events.emit("added", event)
-
-				} else if (event.type === ResourceEventType.Modified) {
-					this.log.debug("watcher: Resource modified", event.object.metadata.name)
-					this.events.emit("modified", event)
-
-				} else if (event.type === ResourceEventType.Deleted) {
-					this.log.debug("watcher: Resource deleted", event.object.metadata.name)
-					this.events.emit("deleted", event)
-
-				} else {
-					this.log.warn(`watcher: Unknown event type: ${e.type} of event `, e)
-				}
+				this.events.emit(event.type, event)
 			} catch (err) {
 				this.log.warn(`watcher: Error in watch resource:`, err)
 			}

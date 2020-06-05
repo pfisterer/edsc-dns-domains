@@ -41,8 +41,8 @@ module.exports = class BindZone {
 		let config = [
 			`zone "${this.spec.domainName}" {`,
 			`	type master; `,
-			`	file "${zoneFileName}"`,
-			keyName ? `	allow-update { key ${keyName}; } ` : `allow-update { none; }`,
+			`	file "${zoneFileName}";`,
+			keyName ? `	allow-update { key ${keyName}; };` : `allow-update { none; };`,
 			`}; `
 		].join("\n")
 

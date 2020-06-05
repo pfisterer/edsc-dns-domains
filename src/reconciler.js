@@ -1,37 +1,61 @@
 const { fixed: { setIntervalAsync: setIntervalAsync }, clearIntervalAsync } = require('set-interval-async')
-const { diff } = require("deep-object-diff")
-
-function getDifferingFieldNames(o1, o2) {
-	if (!o1 && !o2)
-		return []
-
-	if (!o1 && o2)
-		return Object.getOwnPropertyNames(o2)
-
-	if (!o2 && o1)
-		return Object.getOwnPropertyNames(o1)
-
-	return Object.getOwnPropertyNames(diff(o1, o2))
-}
+const getDifferingFieldNames = require('./util/differing-field-names.js')
+const { ResourceEventType } = require('@dot-i/k8s-operator');
 
 class ReconcilerData {
-	constructor(crds, zones) {
-		this.crds = crds
-		this.zones = zones
+	constructor(crs, zoneDomainNames, logger) {
+		this.logger = logger
+		this.crs = crs
+		this.crDomainNames = crs.map(el => el.spec.domainName)
+		this.zoneDomainNames = zoneDomainNames
 	}
 
 	difference(a1, a2) {
 		return a1.filter(x => !a2.includes(x));
 	}
 
-	getDispensableZones() {
-		return this.difference(this.zones, this.crds);
+	getDispensableZoneDomainNames() {
+		return this.difference(this.zoneDomainNames, this.crDomainNames);
 	}
 
-	getMissingZones() {
-		return this.difference(this.crds, this.zones);
+	getMissingZoneDomainNames() {
+		return this.difference(this.crDomainNames, this.zoneDomainNames);
 	}
 
+	// TODO: Generate zones pointing to this nameserver for all getRequiredSuperDomains
+	getSuperDomains(d) {
+		const split = d.split(".")
+		const { topLevelDomains } = parseDomain(d)
+		const d_wo_tld = split.slice(0, split.length - topLevelDomains.length)
+		return d_wo_tld.slice(1)
+	}
+
+	getZoneDomainNamesWithoutProperStatus() {
+		let zones = []
+
+		for (let cr of this.crs) {
+			//Check if a status exists
+			if (!cr.status) {
+				this.logger.debug(`getZoneDomainNamesWithoutProperStatus: Zone ${cr.spec.domainName} does not have a status`)
+				zones.push(cr.spec.domainName)
+				continue
+			}
+
+			//Check that certain fields are present
+			for (const field of ["dnssecAlgorithm", "dnssecKey", "keyName"]) {
+				if (!cr.status[field]) {
+					this.logger.debug(`getZoneDomainNamesWithoutProperStatus: Status of zone ${cr.spec.domainName} is missing status field ${field}`)
+					zones.push(cr.spec.domainName)
+				}
+			}
+		}
+
+		return zones
+	}
+
+	getCrForName(name) {
+		return this.crs.filter(el => el.spec.domainName === name)[0]
+	}
 }
 
 class Reconciler {
@@ -43,27 +67,35 @@ class Reconciler {
 		this.bindRestartRequestCallback = options.bindRestartRequestCallback
 		this.logger = options.logger("Reconciler");
 
-		this.crdWatcher.events.on('added', event => {
-			this.logger.debug("on:added: Added event for zone ", event.object.spec.domainName)
-			this.logger.debug(event)
-			this.add(event.object)
-		})
+		this.addQueue = new Map()
+		this.deleteQueue = new Map()
 
-		this.crdWatcher.events.on('modified', event => {
-			this.logger.debug("on:modified: Modified event for zone ", event.object.spec.domainName)
-			this.add(event.object)
-		})
+		let eventHandler = event => {
+			let q = event.type === ResourceEventType.Deleted ? this.deleteQueue : this.addQueue
 
-		this.crdWatcher.events.on('deleted', event => {
-			this.logger.debug("on:deleted: Deleted event for zone ", event.object.spec.domainName)
-			this.remove(event.object)
-		})
+			if (this.enque(q, event.object))
+				this.logger.debug(`on:${event.type}: Event for zone `, event.object.spec.domainName)
+			else
+				this.logger.debug(`on:${event.type}: Ignoring invalid event:`, event)
+		}
+
+		this.crdWatcher.events.on(ResourceEventType.Added, eventHandler);
+		this.crdWatcher.events.on(ResourceEventType.Modified, eventHandler);
+		this.crdWatcher.events.on(ResourceEventType.Deleted, eventHandler);
 
 		this.reconcileInterval = options.reconcileInterval;
 		this.setupReconcileTimer(this.reconcileInterval);
 		this.bindRestartRequested = false
 
 		this.logger.debug("constructor: New instance with options: ", options);
+	}
+
+	enque(q, cr) {
+		if (cr && cr.spec && cr.spec.domainName) {
+			q.set(cr.spec.domainName, cr)
+			return true
+		} else
+			return false
 	}
 
 	setupReconcileTimer() {
@@ -81,31 +113,30 @@ class Reconciler {
 	}
 
 	async add(cr) {
-		let spec = cr.spec
-		let result = this.bindConfigGen.addOrUpdateZone(spec)
+		let result = this.bindConfigGen.addOrUpdateZone(cr.spec)
 
 		if (result.changed) {
-			this.logger.debug(`add: Result of addOrUpdateZone for zone ${spec.domainName}:`, result);
-			this.logger.debug("add: Requesting bind restart due to changes to zone", spec.domainName)
+			this.logger.debug(`add: Result of addOrUpdateZone for zone ${cr.spec.domainName}:`, result);
+			this.logger.debug("add: Requesting bind restart due to changes to zone", cr.spec.domainName)
 			this.bindRestartRequested = true;
 		} else {
-			this.logger.debug(`add: zone ${spec.domainName} is unchanged`);
+			this.logger.debug(`add: zone ${cr.spec.domainName} is unchanged`);
 		}
 
 		const changedStatusFields = getDifferingFieldNames(result.status, cr.status);
 		if (changedStatusFields.length > 0) {
 			let statusPatch = {}
 			for (let field of changedStatusFields) {
-				this.logger.debug(`${spec.domainName}, ${field} changed from ${cr.status ? cr.status[field] : "<nonexistent>"} to ${result.status[field]}`)
+				this.logger.debug(`${cr.spec.domainName}, ${field} changed from ${cr.status ? cr.status[field] : "<nonexistent>"} to ${result.status[field]}`)
 				statusPatch[field] = result.status[field]
 			}
 
 			try {
-				this.logger.debug(`add: Patching status of zone: ${spec.domainName}: patch = `, statusPatch)
+				this.logger.debug(`add: Patching status of zone: ${cr.spec.domainName}: patch = `, statusPatch)
 				let result = await this.crdWatcher.updateResourceStatus(cr, statusPatch)
 				this.logger.debug(`add: Patching result =`, result)
 			} catch (e) {
-				this.logger.warn(`add: Error while patching status of custom resource (zone: ${spec.domainName}): `, e)
+				this.logger.warn(`add: Error while patching status of custom resource (zone: ${cr.spec.domainName}): `, e)
 			}
 		}
 
@@ -113,81 +144,62 @@ class Reconciler {
 	}
 
 	async remove(cr) {
-		let spec = cr.spec
-		this.logger.debug(`remove: Removing zone with object`, spec)
+		this.logger.debug(`remove: Removing zone with object`, cr.spec)
 
-		let result = this.bindConfigGen.deleteZone(spec);
+		let result = this.bindConfigGen.deleteZone(cr.spec);
 
 		if (result.changed) {
-			this.logger.debug("remove: Requesting bind restart due to changes to zone", spec.domainName)
+			this.logger.debug("remove: Requesting bind restart due to changes to zone", cr.spec.domainName)
 			this.bindRestartRequested = true;
 		}
 
 		return result
 	}
 
-	getZonesWithoutProperStatus(crds) {
-		let zones = []
+	async runQueues() {
+		//Run delete queue
+		for (const key_value of this.deleteQueue)
+			this.add(key_value[1])
+		this.deleteQueue.clear();
 
-		for (let crd of crds) {
-			//Check if a status exists
-			if (!crd.status) {
-				this.logger.debug(`getZonesWithoutProperStatus: Zone ${crd.spec.domainName} does not have a status`)
-				zones.push(crd.spec.domainName)
-				continue
-			}
-
-			//Check that certain fields are present
-			for (const field of ["dnssecAlgorithm", "dnssecKey", "keyName"]) {
-				if (!crd.status[field]) {
-					this.logger.debug(`getZonesWithoutProperStatus: Status of zone ${crd.spec.domainName} is missing status field ${field}`)
-					zones.push(crd.spec.domainName)
-				}
-			}
-		}
-
-		// Remove duplicate entries and return as array
-		return [...new Set(zones)]
+		//Run add queue
+		for (const key_value of this.addQueue)
+			this.add(key_value[1])
+		this.addQueue.clear();
 	}
 
 	async reconcile() {
 		this.logger.debug(`reconcile: Starting`)
 
-		const customResources = (await this.crdWatcher.listItems())
-		const customResourcesDomainNames = customResources.map(el => el.spec.domainName)
 		const zones = await this.bindConfigGen.getZones();
-		const data = new ReconcilerData(customResourcesDomainNames, zones, this.logger)
-
-		function getCrForName(name, crds) {
-			let res = crds.filter(el => el.spec.domainName === name)
-			if (res.length === 1)
-				return res[0]
-			else
-				return undefined
-		}
+		const customResources = (await this.crdWatcher.listItems())
+		const data = new ReconcilerData(customResources, zones, this.logger)
 
 		// Zones that exist in bind but no matching CR exists in K8s
-		for (const name of data.getDispensableZones()) {
+		for (const name of data.getDispensableZoneDomainNames()) {
 			this.logger.debug(`reconcile: Deleting disposable zone = `, name)
-			this.remove({ "spec": { "domainName": name } })
+			const fakeCr = { "spec": { "domainName": name } }
+			this.enque(this.deleteQueue, fakeCr)
 		}
 
 		// Zones that are missing in Bind's config files
-		for (const name of data.getMissingZones()) {
+		for (const name of data.getMissingZoneDomainNames()) {
 			this.logger.debug(`reconcile: Adding missing zone = `, name)
-			this.add(getCrForName(name, customResources))
+			this.enque(this.addQueue, data.getCrForName(name))
 		}
 
 		//Zone that have no proper status -> forcefully recreate them
-		const zonesWithoutProperStatus = this.getZonesWithoutProperStatus(customResources)
-		for (const name of zonesWithoutProperStatus) {
+		for (const name of data.getZoneDomainNamesWithoutProperStatus()) {
 			this.logger.warn(`reconcile: Forcefully re-running zone ${name} because no proper status exists`)
-			this.add(getCrForName(name, customResources))
+			this.enque(this.addQueue, data.getCrForName(name))
 		}
+
+		// Process all events that are queued
+		await this.runQueues()
 
 		//Restart if changes require a restart of bind
 		if (this.bindRestartRequested) {
-			this.logger.info("reconcile: Changes occured, bind restart requested")
+			this.logger.info("reconcile: Changes occured, bind reload requested")
 			this.options.bindRestartRequestCallback();
 			this.bindRestartRequested = false
 		}

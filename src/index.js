@@ -19,6 +19,7 @@ const options = optionparser
   .option('--dryrun', "Do not actually run bind", false)
   .option('--debug-create-crds <interval>', "Create random CRs for debugging", -1)
   .option('--configdir <path>', "The directory where to write the configuration to", "/tmp")
+  .option('--vardir <path>', "The directory where to write the zone files to", "/tmp")
   .option('--crddef <path>', "Path to custom resource defs(CRDs) to use", path.join(__dirname, "./crd-defs"))
   .option('--namespace <namespace>', "Namespace to use", "default")
   .option('--nameserver1 <name1>', "The 1st external name of this nameserver", "ns1.example.com")

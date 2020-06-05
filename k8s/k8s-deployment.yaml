@@ -18,12 +18,16 @@ spec:
           args:
             - "--configdir"
             - "/etc/bind"
+            - "--vardir"
+            - "/var/bind/gen"
             - "--verbose"
             #- "--debug-create-crds"
             #- "10000"
           volumeMounts:
             - name: config-volume
               mountPath: /etc/bind/
+            - name: var-volume
+              mountPath: /var/bind/gen
           ports:
             - containerPort: 7777
         #          livenessProbe:
@@ -49,8 +53,12 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/bind/
+            - name: var-volume
+              mountPath: /var/bind/gen
       volumes:
         - name: config-volume
+          emptyDir: {}
+        - name: var-volume
           emptyDir: {}
 
 ---
