@@ -4,7 +4,7 @@ const log4js = require('log4js')
 const { program: optionparser } = require('commander')
 
 const CrdWatcher = require('./crd-watcher')
-const BindConfigGen = require("./bind-config-gen")
+const BindConfigGen = require("./bind/bind-config-gen")
 const { Reconciler } = require("./reconciler");
 const HealthEndpoint = require("./health-endpoint");
 const dummyCrdGen = require('./dummy-crd-gen')

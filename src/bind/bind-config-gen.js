@@ -4,9 +4,9 @@ const glob = require('glob')
 const path = require('path')
 const globpromise = require('glob-promise')
 
-const BindDnsSecKey = require("./bind/dnssec-bind-key")
-const condUpdate = require('./util/conditional-update-file.js')
-const BindZone = require('./bind/bind-zone.js')
+const BindDnsSecKey = require("./dnssec-bind-key")
+const condUpdate = require('../util/conditional-update-file.js')
+const BindZone = require('./bind-zone.js')
 
 tmp.setGracefulCleanup({ unsafeCleanup: true });
 
