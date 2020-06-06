@@ -1,6 +1,7 @@
 const { fixed: { setIntervalAsync: setIntervalAsync }, clearIntervalAsync } = require('set-interval-async')
 const getDifferingFieldNames = require('./util/differing-field-names.js')
 const { ResourceEventType } = require('@dot-i/k8s-operator');
+const { parseDomain } = require('parse-domain')
 
 class ReconcilerData {
 	constructor(crs, zoneDomainNames, logger) {
@@ -20,14 +21,6 @@ class ReconcilerData {
 
 	getMissingZoneDomainNames() {
 		return this.difference(this.crDomainNames, this.zoneDomainNames);
-	}
-
-	// TODO: Generate zones pointing to this nameserver for all getRequiredSuperDomains
-	getSuperDomains(d) {
-		const split = d.split(".")
-		const { topLevelDomains } = parseDomain(d)
-		const d_wo_tld = split.slice(0, split.length - topLevelDomains.length)
-		return d_wo_tld.slice(1)
 	}
 
 	getZoneDomainNamesWithoutProperStatus() {
@@ -51,6 +44,42 @@ class ReconcilerData {
 		}
 
 		return zones
+	}
+
+	//TODO: check, if this is really required
+	/** Get a Set of upstream zones of the requested domains
+	 * @returns Set of upstream zones (e.g.,  {'b.c.de', 'c.de'})
+	 */
+	getUpstreamDelegationZones() {
+
+		/** Get upstream zones w/o the top level domain for a single domain name
+		 * @param domainName The domain name (e.g., "a.b.c.de")
+		 * @returns Array of upstream zones (e.g., ['b.c.de', 'c.de'])
+		 */
+		function getSuperDomains(domainName) {
+			const split = domainName.split(".")
+			const { topLevelDomains } = parseDomain(domainName)
+			//Remove the top-level domain
+			const d_wo_tld = split.slice(0, split.length - topLevelDomains.length)
+			//Remove the host part (i.e., "a" in above's example)
+			const d_wo_host = d_wo_tld.slice(1)
+
+			let result = []
+			//Generate b.c.de and c.de
+			for (let i = 0; i < d_wo_host.length; ++i) {
+				let r = d_wo_host.slice(i).concat(topLevelDomains)
+				result.push(r.join("."))
+			}
+			return result
+		}
+
+		//Compile a set of upstream zones
+		let result = new Set()
+		for (let domain of this.crDomainNames) {
+			getSuperDomains(domain)
+				.forEach(el => result.add(el))
+		}
+		return result
 	}
 
 	getCrForName(name) {
