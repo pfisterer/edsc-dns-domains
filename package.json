@@ -17,7 +17,7 @@
     "start": "clear"
   },
   "dependencies": {
-    "@dot-i/k8s-operator": "^1.0.3",
+    "@dot-i/k8s-operator": "^1.0.4",
     "commander": "^5.1.0",
     "deep-object-diff": "^1.1.0",
     "express": "^4.17.1",
@@ -26,7 +26,7 @@
     "is-valid-domain": "0.0.14",
     "kubernetes-client": "^9.0.0",
     "lodash": "^4.17.15",
-    "log4js": "^6.2.1",
+    "log4js": "^6.3.0",
     "nearley": "^2.19.3",
     "parse-domain": "^3.0.2",
     "rimraf": "^3.0.2",

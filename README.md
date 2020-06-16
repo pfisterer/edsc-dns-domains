@@ -2,9 +2,9 @@
 
 This project allows to reconfigure a [Bind9](https://www.isc.org/bind/) DNS server running in [Kubernetes](https://kubernetes.io/) dynamically using [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). 
 
-Using Kubernetes, [external-dns](https://github.com/kubernetes-sigs/external-dns) can be used to configure external DNS servers for Kubernetes Ingresses and Services. It supports, amongst many others, "Dynamic Updates in the Domain Name System" (DNS UPDATE, cf. [RFC 2136](https://tools.ietf.org/html/rfc2136)). Bind9 is able to provide a RFC 2136 DNS server that allows external-dns to update a certain DNS zone automatically. However, manually editing Bind9 config files for many users quickly becomes tedious. This is where this project support you. 
+Using Kubernetes, [external-dns](https://github.com/kubernetes-sigs/external-dns) can be used to configure external DNS servers for Kubernetes Ingresses and Services. It supports, amongst many others, "Dynamic Updates in the Domain Name System" (DNS UPDATE, cf. [RFC 2136](https://tools.ietf.org/html/rfc2136)). Bind9 is able to provide a RFC 2136 DNS server that allows external-dns to update a certain DNS zone automatically. However, manually editing Bind9 config files for many users quickly becomes tedious. This is where this project supports you. 
 
-This project supports configuring (and running) a Bind9 server simply by adding/removing/modifying custom resources in Kubernetes. It creates the required configuration files and key material and attaches this information to the status of the individual custom resources.
+This project supports configuring (and running) a Bind9 server by adding/removing/modifying custom resources in Kubernetes. It creates the required configuration files and key material and attaches this information to the status of the individual custom resources.
 
 ## Example 
 Define a zone (`my.example.domain.com`) and apply it using `kubectl apply -f filename.yaml`:
