@@ -1,7 +1,7 @@
 apiVersion: dnsseczone.farberg.de/v1
 kind: DnssecZone
 metadata:
-  name: bla
+  name: test.e.farberg.de
   namespace: default
 spec:
   domainName: "test.e.farberg.de"
@@ -11,3 +11,6 @@ spec:
   retrySeconds: 60
   expireSeconds: 600
   minimumSeconds: 60
+  associatedPrincipals:
+    - test
+    - blablubb

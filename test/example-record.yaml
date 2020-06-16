@@ -1,7 +1,7 @@
 apiVersion: dnsseczone.farberg.de/v1
 kind: DnssecZone
 metadata:
-  name: bla
+  name: bla.dhbw.edsc.cloud
   namespace: default
 spec:
   domainName: "bla.dhbw.edsc.cloud"
@@ -11,3 +11,6 @@ spec:
   retrySeconds: 60
   expireSeconds: 600
   minimumSeconds: 60
+  associatedPrincipals:
+    - test
+    - blablubb
