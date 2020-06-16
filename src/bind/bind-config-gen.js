@@ -113,10 +113,11 @@ module.exports = class BindConfigGen {
 		const zoneSpecChanged = this.conditionalUpdateDest(zoneSpec, confFileName);
 
 		//Create zone file
-		const zoneFile = bindZone.getBindZoneSpec({ zoneFileName, keyName })
+		const extraResourceRecords = undefined
+		const zoneFile = bindZone.getZoneFile(extraResourceRecords)
 		// Write config to file (?<= is a lookbehind expression, cf. https://2ality.com/2017/05/regexp-lookbehind-assertions.html)
 		const zoneFileChanged = this.conditionalUpdateDest(zoneFile, zoneFileName,
-			str => str.replace(/(?<=@IN SOA [^\(]+ \()[0-9+]/gm, "__ignore_changed_serial_number__ "))
+			str => str.replace(/(?<=@ IN SOA [^\(]+ \()[0-9+]/gm, "__ignore_changed_serial_number__ "))
 
 		return { "changed": zoneSpecChanged || zoneFileChanged, "confFile": confFileName, "zoneFile": zoneFileName };
 	}

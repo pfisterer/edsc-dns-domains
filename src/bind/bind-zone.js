@@ -61,9 +61,9 @@ module.exports = class BindZone {
 			`$TTL ${this.spec.ttlSeconds} `,
 			// The @symbol places the $ORIGIN directive(or the zone's name, if the $ORIGIN directive is not set) as the namespace being defined by this SOA resource record.
 			// @ IN SOA <primary-name-server> <hostmaster-email> (<serial-number> <time-to-refresh> <time-to-retry> <time-to-expire> <minimum-TTL> )
-			`@IN SOA ${this.options.nameserver1}. ${this.spec.adminContact}. (${serialNo} ${this.spec.refreshSeconds} ${this.spec.retrySeconds} ${this.spec.expireSeconds} ${this.spec.minimumSeconds})`,
-			`IN NS	${this.options.nameserver1}.`,
-			this.options.nameserver2 ? `IN NS	${this.options.nameserver2}.` : "; no 2nd ns specified",
+			`@ IN SOA ${this.options.nameserver1}. ${this.spec.adminContact}. (${serialNo} ${this.spec.refreshSeconds} ${this.spec.retrySeconds} ${this.spec.expireSeconds} ${this.spec.minimumSeconds})`,
+			`  IN NS	${this.options.nameserver1}.`,
+			this.options.nameserver2 ? `  IN NS	${this.options.nameserver2}.` : "; no 2nd ns specified",
 			extraResourceRecords ? extraResourceRecords : "; no extra RRs specified "
 		].join("\n")
 
