@@ -74,7 +74,7 @@ module.exports = class CrdWatcher extends Operator {
 		const res = await this.customObjectsApi.listNamespacedCustomObject(
 			this.crdGroup,
 			this.crdVersions[0].name,
-			'default', //<your namespace>
+			this.namespace, //namespace>
 			this.crdPlural,
 			'false',
 			'', //<labelSelectorExpresson>
