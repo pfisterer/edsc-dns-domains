@@ -23,6 +23,9 @@ spec:
   refreshSeconds: 60
   retrySeconds: 60
   ttlSeconds: 60
+  associatedPrincipals:
+    - test
+    - blablubb
 ```
 
 The controller creates required Bind9 config files and key material. It then adds data required to configure external-dns in the status of the custom resource:
@@ -41,6 +44,9 @@ spec:
   refreshSeconds: 60
   retrySeconds: 60
   ttlSeconds: 60
+  associatedPrincipals:
+    - test
+    - blablubb
 status:
   dnssecAlgorithm: hmac-sha512
   dnssecKey: +bGKiHE6E8FP3fif/OD+mwqte6WCdYCdTN5Ur+RrTHSRlk7sRd/p1FCbo8aqP4Oc5nt5sCaBJCLfHi/zSa9jRA==
