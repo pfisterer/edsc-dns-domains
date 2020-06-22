@@ -68,6 +68,7 @@ metadata:
   name: bind-dnssec-config-service
   annotations:
     external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.dhbw.e.farberg.de
+    metallb.universe.tf/allow-shared-ip: "edsc-tools"
 spec:
   selector:
     app: bind_dnssec_config
