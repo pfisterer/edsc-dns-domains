@@ -81,11 +81,6 @@ Option 2: Use Skaffold
 
 Run `docker build -t farberg/bind-dnssec-config .`
 
-## Todos
-
-- Reconciler: Periodically call add for a zone to verify its status (add a lastUpdateField to status and define a max age)
-- Reconciler: Call `runQueues` more often than the reconciler to dispatch events earlier
-
 ## FAQ
 
 I'm getting errors like `Exception in main method: Error: customresourcedefinitions.apiextensions.k8s.io is forbidden: User "system:serviceaccount:default:default" cannot create resource "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope`
