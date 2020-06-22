@@ -27,7 +27,7 @@ const options = optionparser
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
-  .version('0.0.3alpha')
+  .version('0.0.4beta')
   .addHelpCommand()
   .parse()
   .opts()

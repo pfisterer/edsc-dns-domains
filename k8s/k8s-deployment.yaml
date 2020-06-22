@@ -20,9 +20,11 @@ spec:
             - "/etc/bind"
             - "--vardir"
             - "/var/bind/gen"
+            - "--nameserver1"
+            - "edsc-cloud-ns1.farberg.de"
+            - "--nameserver2"
+            - "edsc-cloud-ns2.farberg.de"
             - "--verbose"
-            #- "--debug-create-crds"
-            #- "10000"
           volumeMounts:
             - name: config-volume
               mountPath: /etc/bind/
@@ -67,7 +69,7 @@ kind: Service
 metadata:
   name: bind-dnssec-config-service
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.dhbw.e.farberg.de
+    external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.edsc.farberg.de
     metallb.universe.tf/allow-shared-ip: "edsc-tools"
 spec:
   selector:
