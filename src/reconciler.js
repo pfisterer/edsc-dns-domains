@@ -188,7 +188,7 @@ class Reconciler {
 	async runQueues() {
 		//Run delete queue
 		for (const key_value of this.deleteQueue)
-			this.add(key_value[1])
+			this.remove(key_value[1])
 		this.deleteQueue.clear();
 
 		//Run add queue
