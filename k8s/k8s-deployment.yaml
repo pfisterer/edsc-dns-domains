@@ -64,10 +64,11 @@ spec:
           emptyDir: {}
 
 ---
+# Two services because of https://github.com/kubernetes/kubernetes/pull/64471 (Allow for mixed UDP/TCP ports on LoadBalancer Services)
 apiVersion: v1
 kind: Service
 metadata:
-  name: bind-dnssec-config-service
+  name: bind-dnssec-config-service-udp
   annotations:
     external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.edsc.farberg.de
     metallb.universe.tf/allow-shared-ip: "edsc-tools"
@@ -79,7 +80,20 @@ spec:
     - protocol: UDP
       port: 53
       targetPort: 53
-    # cf. https://github.com/kubernetes/kubernetes/pull/64471 (Allow for mixed UDP/TCP ports on LoadBalancer Services)
-    #    - protocol: TCP
-    #      port: 53
-    #      targetPort: 53
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bind-dnssec-config-service-tcp
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.edsc.farberg.de
+    metallb.universe.tf/allow-shared-ip: "edsc-tools"
+spec:
+  selector:
+    app: bind_dnssec_config
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 53
+      targetPort: 53
