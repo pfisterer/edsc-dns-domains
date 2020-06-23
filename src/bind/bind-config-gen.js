@@ -47,6 +47,9 @@ module.exports = class BindConfigGen {
 	globPatternZones() {
 		return this.generatedFilesDir() + '/*.conf';
 	}
+	globPatternKeys() {
+		return this.generatedFilesDir() + '/*.key';
+	}
 	async getZones() {
 		// Iterate all config files and generate include "filename"; configs
 		const configs = await globpromise(this.globPatternZones())
@@ -62,7 +65,13 @@ module.exports = class BindConfigGen {
 
 	generateNamedConf() {
 		// Iterate all config files and generate include "filename"; configs
-		let includes = glob
+		let includesKeys = glob
+			.sync(this.globPatternKeys())
+			.map(el => `include "${el}";\n`)
+			.sort()
+			.reduce((a, b) => a + b, "")
+
+		let includesZones = glob
 			.sync(this.globPatternZones())
 			.map(el => `include "${el}";\n`)
 			.sort()
@@ -81,7 +90,8 @@ module.exports = class BindConfigGen {
 			`	allow-recursion { none; };`,
 			`	recursion no;`,
 			`};`,
-			includes
+			includesKeys,
+			includesZones
 		].join("\n")
 
 		let changed = this.conditionalUpdateDest(config, this.namedConfName());
@@ -92,10 +102,12 @@ module.exports = class BindConfigGen {
 	// DNSSEC keygen
 	// -------------------------------------------------------------------
 
-	getOrGenerateKey(spec) {
+	getOrGenerateKey(spec, status) {
+
 		let options = Object.assign({}, {
 			keyFileName: this.bindKeyFileName(spec),
-			keyName: spec.domainName
+			keyName: spec.domainName,
+			currentStatus: status
 		}, this.options)
 		return new BindDnsSecKey(options).getKey()
 	}
@@ -126,7 +138,7 @@ module.exports = class BindConfigGen {
 	// Main management functionality
 	// -------------------------------------------------------------------
 
-	addOrUpdateZone(spec) {
+	addOrUpdateZone(spec, status) {
 		const bindZone = new BindZone(spec, this.options)
 
 		//Validate input
@@ -138,7 +150,7 @@ module.exports = class BindConfigGen {
 
 		//Update configuration
 		this.logger.debug("addOrUpdateZone: Starting to process zone", spec.domainName)
-		let { changed: keyChanged, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec)
+		let { changed: keyChanged, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec, status)
 		let { changed: zoneFilesChanged } = this.getOrCreateZoneFiles(bindZone, keyName)
 		let { changed: namedConfChanged } = this.generateNamedConf()
 
