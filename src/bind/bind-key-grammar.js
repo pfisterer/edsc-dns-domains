@@ -10,7 +10,7 @@ var grammar = {
     {"name": "keyfile$string$3", "symbols": [{"literal":"s"}, {"literal":"e"}, {"literal":"c"}, {"literal":"r"}, {"literal":"e"}, {"literal":"t"}], "postprocess": function joiner(d) {return d.join('');}},
     {"name": "keyfile$string$4", "symbols": [{"literal":"\""}, {"literal":";"}], "postprocess": function joiner(d) {return d.join('');}},
     {"name": "keyfile$string$5", "symbols": [{"literal":"}"}, {"literal":";"}], "postprocess": function joiner(d) {return d.join('');}},
-    {"name": "keyfile", "symbols": ["keyfile$string$1", "whitespace", {"literal":"\""}, "keyname", {"literal":"\""}, "whitespace", {"literal":"{"}, "whitespace", "keyfile$string$2", "whitespace", "algorithm", {"literal":";"}, "whitespace", "keyfile$string$3", "whitespace", {"literal":"\""}, "secret", "keyfile$string$4", "whitespace", "keyfile$string$5", "whitespace"], "postprocess": 
+    {"name": "keyfile", "symbols": ["keyfile$string$1", "whitespace", {"literal":"\""}, "keyname", {"literal":"\""}, "whitespace", {"literal":"{"}, "whitespace", "keyfile$string$2", "whitespace", "algorithm", {"literal":";"}, "whitespace", "keyfile$string$3", "whitespace", {"literal":"\""}, "secret", "keyfile$string$4", "optional_whitespace", "keyfile$string$5", "optional_whitespace"], "postprocess": 
         function(data) {
             return {
                 keyname: data[3],
@@ -22,6 +22,9 @@ var grammar = {
     {"name": "whitespace$ebnf$1", "symbols": [/[\s]/]},
     {"name": "whitespace$ebnf$1", "symbols": ["whitespace$ebnf$1", /[\s]/], "postprocess": function arrpush(d) {return d[0].concat([d[1]]);}},
     {"name": "whitespace", "symbols": ["whitespace$ebnf$1"], "postprocess": d => d[0].join('')},
+    {"name": "optional_whitespace$ebnf$1", "symbols": []},
+    {"name": "optional_whitespace$ebnf$1", "symbols": ["optional_whitespace$ebnf$1", /[\s]/], "postprocess": function arrpush(d) {return d[0].concat([d[1]]);}},
+    {"name": "optional_whitespace", "symbols": ["optional_whitespace$ebnf$1"], "postprocess": d => d[0].join('')},
     {"name": "keyname$ebnf$1", "symbols": [/[^"]/]},
     {"name": "keyname$ebnf$1", "symbols": ["keyname$ebnf$1", /[^"]/], "postprocess": function arrpush(d) {return d[0].concat([d[1]]);}},
     {"name": "keyname", "symbols": ["keyname$ebnf$1"], "postprocess": d => d[0].join('')},

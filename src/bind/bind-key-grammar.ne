@@ -1,7 +1,7 @@
 keyfile -> "key" whitespace "\"" keyname "\"" whitespace "{" 
 	whitespace "algorithm" whitespace algorithm ";"
 	whitespace "secret" whitespace "\"" secret "\";"
-	whitespace "};" whitespace {%
+	optional_whitespace "};" optional_whitespace {%
     function(data) {
         return {
             keyname: data[3],
@@ -12,6 +12,7 @@ keyfile -> "key" whitespace "\"" keyname "\"" whitespace "{"
 	%}
 
 whitespace -> [\s]:+ {% d => d[0].join('') %}
+optional_whitespace -> [\s]:* {% d => d[0].join('') %}
 
 keyname -> [^"]:+ {% d => d[0].join('') %}
 
