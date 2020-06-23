@@ -142,7 +142,7 @@ class Reconciler {
 	}
 
 	async add(cr) {
-		let result = this.bindConfigGen.addOrUpdateZone(cr.spec)
+		let result = this.bindConfigGen.addOrUpdateZone(cr.spec, cr.status)
 
 		if (result.changed) {
 			this.logger.debug(`add: Result of addOrUpdateZone for zone ${cr.spec.domainName}:`, result);
