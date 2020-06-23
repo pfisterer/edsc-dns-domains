@@ -22,35 +22,47 @@ module.exports = class BindDnsSecKey {
 
 	getKey() {
 		const keyLoadResult = this.loadKeyFile();
-		const validFileSystemKey = this.isValidKey(keyLoadResult)
-		const validStatusKey = this.isValidKey(options.currentStatus)
-		const statusAndFileSystemDiffer = this.keyMatchesStatus(keyLoadResult, options.currentStatus)
+		const validFileSystemKey = this.isValidKey(keyLoadResult, `${this.options.keyFileName}`)
+		const validStatusKey = this.isValidKey(this.options.currentStatus, "cr status")
+		const statusAndFileSystemDiffer = !this.keyMatchesStatus(keyLoadResult, this.options.currentStatus)
+
+		this.logger.debug(`getKey(${this.options.keyName}): validFileSystemKey = ${validFileSystemKey}, validStatusKey = ${validStatusKey}, statusAndFileSystemDiffer = ${statusAndFileSystemDiffer}`)
+
+		let result;
 
 		if (validStatusKey) { //A status in k8s exists
 
 			if (statusAndFileSystemDiffer) { //Create correct key on file system
-				this.logger.debug(`getKey: Status/Key don't match, creating new key on file system from current status`)
-				this.createKeyFileFromExistingKey(this.options.keyFileName, options.currentStatus);
-				return Object.assign({}, { changed: true }, this.loadKeyFile());
+				this.logger.debug(`getKey(${this.options.keyName}): Status/Key don't match, creating new key on file system from current status`)
+				this.createKeyFileFromExistingKey(this.options.keyFileName, this.options.currentStatus);
+
+				let newKeyFileResult = this.loadKeyFile()
+				this.logger.debug(`getKey(${this.options.keyName}): New key from status`, newKeyFileResult)
+				result = Object.assign({}, { changed: true }, newKeyFileResult);
 
 			} else { // All good
-				this.logger.debug(`getKey: Everything fine`)
-				return Object.assign({}, { changed: false }, keyLoadResult);
+				this.logger.debug(`getKey(${this.options.keyName}): Everything fine`)
+				result = Object.assign({}, { changed: false }, keyLoadResult);
 			}
 
 		} else { // No status in k8s exists
 
 			if (validFileSystemKey) { //Load key from file system
-				this.logger.debug(`getKey: Loading key from file system`)
-				return Object.assign({}, { changed: false }, keyLoadResult);
+				this.logger.debug(`getKey(${this.options.keyName}): Loading key from file system`)
+				result = Object.assign({}, { changed: false }, keyLoadResult);
 
 			} else { //Generate new key
-				this.logger.debug(`getKey: Unable to load key from ${this.options.keyFileName}, generating a new one`)
+				this.logger.debug(`getKey(${this.options.keyName}): Unable to load key from ${this.options.keyFileName}, generating a new one`)
 				this.generateNewKeyFile();
-				return Object.assign({}, { changed: true }, this.loadKeyFile())
+
+				let newKeyFileResult = this.loadKeyFile()
+				this.logger.debug(`getKey(${this.options.keyName}): New key from status`, newKeyFileResult)
+				result = Object.assign({}, { changed: true }, newKeyFileResult)
 			}
 		}
 
+		//this.logger.debug(`getKey(${this.options.keyName}): Result = `, result)
+		return result
 	}
 
 	generateNewKeyFile() {
@@ -74,12 +86,12 @@ module.exports = class BindDnsSecKey {
 	}
 
 	keyMatchesStatus(key, status) {
-		if (!this.isValidKey(key)) {
-			this.logger.debug("keyMatchesStatus: Invalid key");
+		if (!this.isValidKey(key, "keyMatchesStatus:key")) {
+			this.logger.debug(`keyMatchesStatus: Invalid key`);
 			return false;
 		}
 
-		if (!this.isValidKey(status)) {
+		if (!this.isValidKey(status, "keyMatchesStatus:status")) {
 			this.logger.debug("keyMatchesStatus: Invalid status");
 			return false;
 		}
@@ -94,15 +106,15 @@ module.exports = class BindDnsSecKey {
 		return true;
 	}
 
-	isValidKey(key) {
+	isValidKey(key, keyName) {
 		if (!key) {
-			this.logger.debug("isValidKey: No key provided, returning false");
+			this.logger.debug(`isValidKey: No key provided (keyname=${keyName}) returning false`);
 			return false
 		}
 
 		for (let prop of ["keyName", "dnssecAlgorithm", "dnssecKey"]) {
 			if (!key[prop]) {
-				this.logger.debug(`isValidKey: ${prop} missing in `, key, ` returning false`);
+				this.logger.debug(`isValidKey: ${prop} missing (keyname=${keyName}) in `, key, ` returning false`);
 				return false;
 			}
 		}
@@ -118,6 +130,7 @@ module.exports = class BindDnsSecKey {
 			`};`,
 		].join('\n')
 
+		this.logger.debug(`createKeyFileFromExistingKey: New key file ${fileName} with contents = `, contents);
 		fs.writeFileSync(fileName, contents)
 	}
 
@@ -138,17 +151,22 @@ module.exports = class BindDnsSecKey {
 
 			// Parsing failed
 			if (!parser.results || !parser.results[0]) {
+				this.logger.error(`Unable to load key from: '`, contents, "', parser state= ", parser)
 				return null;
 			}
 
 			// Return data from parser results
-			return {
+			let result = {
 				fileValid: true,
 				keyFile: this.options.keyFileName,
 				keyName: parser.results[0].keyname,
 				dnssecAlgorithm: parser.results[0].algorithm,
 				dnssecKey: parser.results[0].secret,
 			}
+
+			//this.logger.debug(`loadKeyFile: Loaded ${this.options.keyFileName}, result = `, result)
+
+			return result;
 
 		} catch (e) {
 			this.logger.debug(`loadKeyFile: Unable to parse key file ${this.options.keyFileName}, error=`, e)

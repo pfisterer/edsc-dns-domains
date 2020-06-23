@@ -37,15 +37,19 @@ module.exports = class BindZone {
 	}
 
 	getBindZoneSpec({ zoneFileName, keyName }) {
+		const allowQuery = `	allow-query { any; };`
+		const allowUpdate = keyName ? `	allow-update { key ${keyName}; };` : `allow-update { none; };`
+		const allowTransfer = keyName ? `	allow-transfer { key ${keyName}; };` : `allow-transfer { none; };`
 
 		let config = [
 			`zone "${this.spec.domainName}" {`,
 			`	type master; `,
 			`	file "${zoneFileName}";`,
-			keyName ? `	allow-update { key ${keyName}; };` : `allow-update { none; };`,
+			allowQuery,
+			allowUpdate,
+			allowTransfer,
 			`}; `
 		].join("\n")
-
 
 		return config
 	}

@@ -109,7 +109,10 @@ module.exports = class BindConfigGen {
 			keyName: spec.domainName,
 			currentStatus: status
 		}, this.options)
-		return new BindDnsSecKey(options).getKey()
+
+		let key = new BindDnsSecKey(options).getKey()
+		//this.logger.debug(`getOrGenerateKey: Result of getKey = `, key)
+		return key
 	}
 
 	// -------------------------------------------------------------------
@@ -138,7 +141,7 @@ module.exports = class BindConfigGen {
 	// Main management functionality
 	// -------------------------------------------------------------------
 
-	addOrUpdateZone(spec, status) {
+	addOrUpdateZone(spec, crStatus) {
 		const bindZone = new BindZone(spec, this.options)
 
 		//Validate input
@@ -150,7 +153,7 @@ module.exports = class BindConfigGen {
 
 		//Update configuration
 		this.logger.debug("addOrUpdateZone: Starting to process zone", spec.domainName)
-		let { changed: keyChanged, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec, status)
+		let { changed: keyChanged, keyName, dnssecKey, dnssecAlgorithm } = this.getOrGenerateKey(spec, crStatus)
 		let { changed: zoneFilesChanged } = this.getOrCreateZoneFiles(bindZone, keyName)
 		let { changed: namedConfChanged } = this.generateNamedConf()
 
