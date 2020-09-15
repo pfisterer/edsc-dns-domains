@@ -71,6 +71,8 @@ module.exports = class CrdWatcher extends Operator {
 	}
 
 	async listItems() {
+		//TODO Evaluate _continue: field
+
 		const res = await this.customObjectsApi.listNamespacedCustomObject(
 			this.crdGroup,
 			this.crdVersions[0].name,
