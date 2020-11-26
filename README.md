@@ -28,7 +28,7 @@ spec:
     - blablubb
 ```
 
-The controller creates required Bind9 config files and key material. It then adds data required to configure external-dns in the status of the custom resource:
+The controller creates Bind9 config files and key material. It then adds data required to configure external-dns in the status of the custom resource:
 
 ```yaml
 apiVersion: dnsseczone.farberg.de/v1
@@ -79,7 +79,7 @@ Option 2: Use Skaffold
 
 ### Build the Docker container
 
-Run `docker build -t farberg/bind-dnssec-config .`
+Run `docker build -t farberg/bind-dnssec-config controller/` and `docker build -t farberg/bind-dnssec-runner bindrunner`
 
 ## FAQ
 

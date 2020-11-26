@@ -7,9 +7,11 @@ metadata:
 build:
   artifacts:
     - image: farberg/bind-dnssec-config
-      context: .
+      context: controller
+    - image: farberg/bind-dnssec-runner
+      context: bindrunner
 
 deploy:
   kubectl:
     manifests:
-      - k8s/k8s-deployment.yaml
+      - k8s/*.yaml
