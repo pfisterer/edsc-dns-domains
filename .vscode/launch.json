@@ -8,7 +8,7 @@
 			"type": "node",
 			"request": "launch",
 			"name": "Dummy CRD Generator",
-			"program": "${workspaceFolder}/test/dummy-crd-gen-test.js",
+			"program": "${workspaceFolder}/controller/test/dummy-crd-gen-test.js",
 			"skipFiles": [
 				"<node_internals>/**"
 			]
@@ -20,7 +20,7 @@
 			"skipFiles": [
 				"<node_internals>/**"
 			],
-			"program": "${workspaceFolder}/src/index.js",
+			"program": "${workspaceFolder}/controller/src/index.js",
 			"args": [
 				"--verbose",
 				"--dryrun"
