@@ -25,7 +25,7 @@
     "glob-promise": "^3.4.0",
     "is-valid-domain": "0.0.17",
     "kubernetes-client": "^9.0.0",
-    "lodash": "^4.17.20",
+    "lodash": "^4.17.21",
     "log4js": "^6.3.0",
     "nearley": "^2.19.8",
     "parse-domain": "^3.0.3",
