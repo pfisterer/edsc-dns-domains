@@ -7,7 +7,7 @@ Using Kubernetes, [external-dns](https://github.com/kubernetes-sigs/external-dns
 This project supports configuring (and running) a Bind9 server by adding/removing/modifying custom resources in Kubernetes. It creates the required configuration files and key material and attaches this information to the status of the individual custom resources.
 
 ## Example 
-Define a zone (`my.example.domain.com`) and apply it using `kubectl apply -f filename.yaml`:
+Define a zone (`someusername.user.cloud.dhbw-mannheim.de`) and apply it using `kubectl apply -f filename.yaml`:
 
 ```yaml
 apiVersion: dnsseczone.farberg.de/v1
@@ -16,9 +16,9 @@ metadata:
   name: some-name
   namespace: default
 spec:
-  adminContact: admin.my.example.domain.com
-  domainName: my.example.domain.com
-  expireSeconds: 600
+  domainName: someusername.user.cloud.dhbw-mannheim.de
+  adminContact: admin.someusername.user.cloud.dhbw-mannheim.de
+  expireSeconds: 60
   minimumSeconds: 60
   refreshSeconds: 60
   retrySeconds: 60
@@ -37,9 +37,9 @@ metadata:
   name: some-name
   namespace: default
 spec:
-  adminContact: admin.my.example.domain.com
-  domainName: my.example.domain.com
-  expireSeconds: 600
+  domainName: someusername.user.cloud.dhbw-mannheim.de
+  adminContact: admin.someusername.user.cloud.dhbw-mannheim.de
+  expireSeconds: 60
   minimumSeconds: 60
   refreshSeconds: 60
   retrySeconds: 60
@@ -50,7 +50,7 @@ spec:
 status:
   dnssecAlgorithm: hmac-sha512
   dnssecKey: +bGKiHE6E8FP3fif/OD+mwqte6WCdYCdTN5Ur+RrTHSRlk7sRd/p1FCbo8aqP4Oc5nt5sCaBJCLfHi/zSa9jRA==
-  keyName: my.example.domain.com
+  keyName: someusername.user.cloud.dhbw-mannheim.de
 ```
 
 ## Running and Development
@@ -81,8 +81,20 @@ Option 2: Use Skaffold
 
 Run `docker build -t farberg/bind-dnssec-config controller/` and `docker build -t farberg/bind-dnssec-runner bindrunner`
 
+
+## Use Case
+
+<div style="text-align: center">
+  <img src="use-case-dhbw-mannheim.svg" style="width: 75%;">
+</div>
+
 ## FAQ
 
 I'm getting errors like `Exception in main method: Error: customresourcedefinitions.apiextensions.k8s.io is forbidden: User "system:serviceaccount:default:default" cannot create resource "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope`
 - Create missing RBAC roles
 - For development (e.g., in Minikube), run `kubectl create clusterrolebinding --clusterrole=cluster-admin --user=system:serviceaccount:default:default --clusterrole=cluster-admin --user=system:serviceaccount rds-admin-binding`
+
+
+## Internal Notes
+
+Convert use case from PDF to SVG: ``NAME="use-case-dhbw-mannheim.pdf" ; pdfcrop --margins 0 "$NAME" "tmp.pdf" && pdf2svg	"tmp.pdf" `basename "$NAME" .pdf`.svg && rm tmp.pdf``

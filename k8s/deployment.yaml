@@ -70,7 +70,7 @@ kind: Service
 metadata:
   name: bind-dnssec-config-service-udp
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.edsc.farberg.de
+    external-dns.alpha.kubernetes.io/hostname: dyn-ns.cloud.dhbw-mannheim.de
     metallb.universe.tf/allow-shared-ip: "edsc-tools"
 spec:
   selector:
@@ -87,7 +87,7 @@ kind: Service
 metadata:
   name: bind-dnssec-config-service-tcp
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: edsc-cloud-dns.edsc.farberg.de
+    external-dns.alpha.kubernetes.io/hostname: dyn-ns.cloud.dhbw-mannheim.de
     metallb.universe.tf/allow-shared-ip: "edsc-tools"
 spec:
   selector:
