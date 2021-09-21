@@ -64,7 +64,7 @@ class CrdWatcher extends Operator {
 process.on('unhandledRejection', err => console.error(err));
 
 (async () => {
-	const p = path.join(__dirname, "../src/crd-defs/dnssec-zone-crd-v1beta1.yaml")
+	const p = path.join(__dirname, "../src/crd-defs/dnssec-zone-crd-v1.yaml")
 	console.log(p)
 	const operator = new CrdWatcher(console, p);
 	await operator.start();

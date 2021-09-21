@@ -29,7 +29,7 @@ class CrdHelper extends Operator {
 async function main() {
 	const interval = 2000
 	const namespace = "default"
-	const crdFile = "src/crd-defs/dnssec-zone-crd-v1beta1.yaml"
+	const crdFile = "src/crd-defs/dnssec-zone-crd-v1.yaml"
 
 	const crd = new CrdHelper(getLogger("CrdHelper"), crdFile, namespace)
 	await crd.start();

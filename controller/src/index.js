@@ -56,7 +56,7 @@ async function main(options) {
   const bindConfigGen = new BindConfigGen(Object.assign({}, { logger: getLogger }, options))
 
   //Create custom resource watcher
-  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1beta1.yaml");
+  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1.yaml");
   const crdWatcher = new CrdWatcher(Object.assign({}, { crdFile, logger: getLogger }, options))
   await crdWatcher.start();
 
