@@ -21,9 +21,9 @@ spec:
             - "--vardir"
             - "/var/bind/gen"
             - "--nameserver1"
-            - "edsc-cloud-ns1.farberg.de"
-            - "--nameserver2"
-            - "edsc-cloud-ns2.farberg.de"
+            - "cloud-ns.dhbw-mannheim.de"
+            # - "--nameserver2"
+            # - "cloud-ns.dhbw-mannheim.de"
             - "--verbose"
           volumeMounts:
             - name: config-volume
