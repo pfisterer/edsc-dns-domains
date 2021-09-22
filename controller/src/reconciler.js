@@ -37,7 +37,7 @@ class ReconcilerData {
 			//Check that certain fields are present
 			for (const field of ["dnssecAlgorithm", "dnssecKey", "keyName"]) {
 				if (!cr.status[field]) {
-					this.logger.debug(`getZoneDomainNamesWithoutProperStatus: Status of zone ${cr.spec.domainName} is missing status field ${field}`)
+					this.logger.debug(`getZoneDomainNamesWithoutProperStatus: Status of zone ${cr.spec.domainName} is missing status field ${field}, the status is: `, cr.status)
 					zones.push(cr.spec.domainName)
 				}
 			}
@@ -164,6 +164,7 @@ class Reconciler {
 				this.logger.debug(`add: Patching status of zone: ${cr.spec.domainName}: patch = `, statusPatch)
 				let result = await this.crdWatcher.updateResourceStatus(cr, statusPatch)
 				this.logger.debug(`add: Patching result =`, result)
+
 			} catch (e) {
 				this.logger.warn(`add: Error while patching status of custom resource (zone: ${cr.spec.domainName}): `, e)
 			}
@@ -175,11 +176,11 @@ class Reconciler {
 	async remove(cr) {
 		this.logger.debug(`remove: Removing zone with object`, cr.spec)
 
-		let result = this.bindConfigGen.deleteZone(cr.spec);
+		let result = this.bindConfigGen.deleteZone(cr.spec)
 
 		if (result.changed) {
 			this.logger.debug("remove: Requesting bind restart due to changes to zone", cr.spec.domainName)
-			this.bindRestartRequested = true;
+			this.bindRestartRequested = true
 		}
 
 		return result
@@ -189,7 +190,7 @@ class Reconciler {
 		//Run delete queue
 		for (const key_value of this.deleteQueue)
 			this.remove(key_value[1])
-		this.deleteQueue.clear();
+		this.deleteQueue.clear()
 
 		//Run add queue
 		for (const key_value of this.addQueue)
