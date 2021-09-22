@@ -55,6 +55,8 @@ spec:
             status:
               type: object
               properties:
+                keyName:
+                  type: string
                 dnssecAlgorithm:
                   type: string
                 dnssecKey:
