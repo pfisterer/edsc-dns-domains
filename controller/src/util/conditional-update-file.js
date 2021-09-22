@@ -5,7 +5,16 @@ module.exports = function (logger) {
 	if (!logger)
 		logger = console
 
-	return function (content, destFile, modifyCallbackBeforeHash) {
+	function updatePermissions(file, permissions) {
+		if (fs.existsSync(file)) {
+			logger.debug(`Updating permissions of ${file} to ${permissions}`)
+			fs.chmodSync(file, permissions)
+		} else {
+			logger.debug(`Not Updating permissions of ${file} to ${permissions}, file does not exist`)
+		}
+	}
+
+	return function (content, destFile, modifyCallbackBeforeHash, permissions) {
 		//logger.debug(`conditionalUpdateDest: Checking whether ${destFile} needs to be updated`)
 
 		let hash = (str) => {
@@ -30,6 +39,9 @@ module.exports = function (logger) {
 			fs.writeFileSync(destFile, content)
 			return true;
 		}
+
+		if (permissions)
+			updatePermissions(destFile, permissions)
 
 		//logger.debug(`conditionalUpdateDest: Not updating ${destFile} since it would be unchanged`)
 		return false;
