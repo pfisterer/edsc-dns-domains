@@ -19,7 +19,10 @@ module.exports = class BindConfigGen {
 
 		this.logger.debug("New instance with options: ", options);
 
-		this.ensureConfigPathsExist();
+		this.defaultFilePermissions = 0o664
+		this.defaultPathPermissions = 0o755
+
+		this.ensureConfigPathsExist()
 	}
 
 	// -------------------------------------------------------------------
@@ -57,6 +60,7 @@ module.exports = class BindConfigGen {
 	}
 	ensureConfigPathsExist() {
 		fs.mkdirSync(this.generatedFilesDir(), { recursive: true })
+		fs.chmodSync(this.generatedFilesDir(), this.defaultPathPermissions)
 	}
 
 	// -------------------------------------------------------------------
@@ -94,7 +98,7 @@ module.exports = class BindConfigGen {
 			includesZones
 		].join("\n")
 
-		let changed = this.conditionalUpdateDest(config, this.namedConfName());
+		let changed = this.conditionalUpdateDest(config, this.namedConfName(), null, this.defaultFilePermissions);
 		return { changed: changed };
 	}
 
@@ -125,14 +129,18 @@ module.exports = class BindConfigGen {
 
 		//Create bind zone spec: zone {...}
 		const zoneSpec = bindZone.getBindZoneSpec({ zoneFileName, keyName })
-		const zoneSpecChanged = this.conditionalUpdateDest(zoneSpec, confFileName);
+		const zoneSpecChanged = this.conditionalUpdateDest(zoneSpec, confFileName, null, this.defaultFilePermissions);
 
 		//Create zone file
 		const extraResourceRecords = undefined
 		const zoneFile = bindZone.getZoneFile(extraResourceRecords)
 		// Write config to file (?<= is a lookbehind expression, cf. https://2ality.com/2017/05/regexp-lookbehind-assertions.html)
-		const zoneFileChanged = this.conditionalUpdateDest(zoneFile, zoneFileName,
-			str => str.replace(/(?<=@ IN SOA [^\(]+ \()[0-9+]/gm, "__ignore_changed_serial_number__ "))
+		const zoneFileChanged = this.conditionalUpdateDest(
+			zoneFile,
+			zoneFileName,
+			str => str.replace(/(?<=@ IN SOA [^\(]+ \()[0-9+]/gm, "__ignore_changed_serial_number__ "),
+			this.defaultFilePermissions
+		)
 
 		return { "changed": zoneSpecChanged || zoneFileChanged, "confFile": confFileName, "zoneFile": zoneFileName };
 	}
@@ -157,14 +165,14 @@ module.exports = class BindConfigGen {
 		let { changed: zoneFilesChanged } = this.getOrCreateZoneFiles(bindZone, keyName)
 		let { changed: namedConfChanged } = this.generateNamedConf()
 
-		let changed = keyChanged || zoneFilesChanged || namedConfChanged;
+		let changed = keyChanged || zoneFilesChanged || namedConfChanged
 		let status = { keyName, dnssecKey, dnssecAlgorithm }
 
 		this.logger.debug(`addOrUpdateZone: Done (zone=${spec.domainName}): changes: key: ${keyChanged}, zone files: ${zoneFilesChanged}, named.conf: ${namedConfChanged}`)
 		if (changed)
 			this.logger.info(`addOrUpdateZone: Zone ${spec.domainName} has changed`)
 
-		return { changed, status };
+		return { changed, status }
 	}
 
 	deleteZone(spec) {
