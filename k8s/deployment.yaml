@@ -5,7 +5,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: "bind_dnssec_config"
+      app: bind_dnssec_config
   replicas: 1
   template:
     metadata:
@@ -24,6 +24,7 @@ spec:
             - "cloud-ns.dhbw-mannheim.de"
             # - "--nameserver2"
             # - "cloud-ns.dhbw-mannheim.de"
+            - "--bind-verbose-output"
             - "--verbose"
           volumeMounts:
             - name: config-volume

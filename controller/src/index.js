@@ -24,6 +24,7 @@ const options = optionparser
   .option('--namespace <namespace>', "Namespace to use", "default")
   .option('--nameserver1 <name1>', "The 1st external name of this nameserver", "ns1.example.com")
   .option('--nameserver2 <name1>', "The 2nd external name of this nameserver", undefined)
+  .option('--bind-verbose-output', "Use verbose logging for Bind configuration", false)
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)

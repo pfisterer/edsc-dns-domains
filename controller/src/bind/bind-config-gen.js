@@ -67,6 +67,34 @@ module.exports = class BindConfigGen {
 	// named.conf
 	// -------------------------------------------------------------------
 
+	verboseLoggingConf() {
+		return `logging {
+			channel custom_debug_syslog {
+				syslog daemon;
+				severity debug 20; # add 20 after debug for full logging
+			};
+
+			category default { custom_debug_syslog; };
+			category general { custom_debug_syslog; };
+			category database { custom_debug_syslog; };
+			category security { custom_debug_syslog; };
+			category config { custom_debug_syslog; };
+			category resolver { custom_debug_syslog; };
+			category xfer-in { custom_debug_syslog; };
+			category xfer-out { custom_debug_syslog; };
+			category notify { custom_debug_syslog; };
+			category client { custom_debug_syslog; };
+			category unmatched { custom_debug_syslog; };
+			category queries { custom_debug_syslog; };
+			category network { custom_debug_syslog; };
+			category update { custom_debug_syslog; };
+			category dispatch { custom_debug_syslog; };
+			category dnssec { custom_debug_syslog; };
+			category lame-servers { custom_debug_syslog; };
+			category security { custom_debug_syslog; };
+		};`
+	}
+
 	generateNamedConf() {
 		// Iterate all config files and generate include "filename"; configs
 		let includesKeys = glob
@@ -84,16 +112,19 @@ module.exports = class BindConfigGen {
 		let config = [
 			`options {`,
 			`	directory "/var/bind";`,
-			`	listen-on { any; };`,
+			`	listen-on { 0.0.0.0/0; };`,
 			`	listen-on-v6 { any; };`,
+			// `	listen-on { any; };`,
+			// `	listen-on-v6 { any; };`,
 			`	allow-transfer { none; };`,
 			`	auth-nxdomain no;    # conform to RFC1035`,
-			//If you have problems and are behind a firewall `query-source address * port 53;`,
+			// If you have problems and are behind a firewall `query-source address * port 53;`,
 			`	pid-file "/var/run/named/named.pid";`,
 			// Changing this is NOT RECOMMENDED; see the notes above and in named.conf.recursive.`
 			`	allow-recursion { none; };`,
 			`	recursion no;`,
 			`};`,
+			this.options.bindVerboseOutput ? this.verboseLoggingConf() : "",
 			includesKeys,
 			includesZones
 		].join("\n")
@@ -107,14 +138,22 @@ module.exports = class BindConfigGen {
 	// -------------------------------------------------------------------
 
 	getOrGenerateKey(spec, status) {
+		const keyFileName = this.bindKeyFileName(spec)
 
 		let options = Object.assign({}, {
-			keyFileName: this.bindKeyFileName(spec),
+			keyFileName,
 			keyName: spec.domainName,
 			currentStatus: status
 		}, this.options)
 
 		let key = new BindDnsSecKey(options).getKey()
+
+		//Set file permissions
+		if (fs.existsSync(keyFileName) && this.defaultFilePermissions) {
+			this.logger.debug(`Updating permissions of ${keyFileName} to ${this.defaultFilePermissions}`)
+			fs.chmodSync(keyFileName, this.defaultFilePermissions)
+		}
+
 		//this.logger.debug(`getOrGenerateKey: Result of getKey = `, key)
 		return key
 	}
