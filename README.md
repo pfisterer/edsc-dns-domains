@@ -88,6 +88,14 @@ Run `docker build -t farberg/bind-dnssec-config controller/` and `docker build -
   <img src="use-case-dhbw-mannheim.svg" style="width: 75%;">
 </div>
 
+## Testing
+
+```console
+HMAC="hmac-sha256:my-awesome-keyname:THEKEYINBASE64FORMAT"
+RECORD='test.user.cloud.dhbw-mannheim.de. 900 IN TXT "Hello, how are you?"'
+echo -e 'server dyn-ns.cloud.dhbw-mannheim.de\nupdate add $RECORD\nsend\n' | nsupdate -y "HMAC"
+```
+
 ## FAQ
 
 I'm getting errors like `Exception in main method: Error: customresourcedefinitions.apiextensions.k8s.io is forbidden: User "system:serviceaccount:default:default" cannot create resource "customresourcedefinitions" in API group "apiextensions.k8s.io" at the cluster scope`
