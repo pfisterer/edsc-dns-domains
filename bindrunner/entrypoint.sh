@@ -19,6 +19,11 @@ show_banner () {
 	echo "ENTRYPOINT: $1"
 } 
 
+fix_fs_permissions() {
+	chown -R "root:$NAMED_GROUP" "$NAMED_CONFIG_DIR"
+	chmod -R ug+r "$NAMED_CONFIG_DIR"
+}
+
 wait_for_config_wo_errors() {
 
 	# Wait until bind config file exists
@@ -55,8 +60,7 @@ wait_for_config_wo_errors() {
 
 while /bin/true; do 
 	# Set correct access rights on config folder
-	chown -R "root:$NAMED_GROUP" "$NAMED_CONFIG_DIR"
-	chmod -R ug+r "$NAMED_CONFIG_DIR"
+	fix_fs_permissions
 
 	# Wait for valid config
 	wait_for_config_wo_errors
@@ -77,6 +81,7 @@ while /bin/true; do
 		if [[ -f "$RESTART_REQUEST_FILE" ]]; then
 			# Wait for valid config
 			show_banner "Restart requested (file $RESTART_REQUEST_FILE present), checking config first"			
+			fix_fs_permissions
 			wait_for_config_wo_errors
 		
 			# Send SIGHUP to bind
