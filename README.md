@@ -91,9 +91,9 @@ Run `docker build -t farberg/bind-dnssec-config controller/` and `docker build -
 ## Testing
 
 ```console
-HMAC="hmac-sha256:my-awesome-keyname:THEKEYINBASE64FORMAT"
+HMAC="hmac-sha512:my-awesome-keyname:THEKEYINBASE64FORMAT"
 RECORD='test.user.cloud.dhbw-mannheim.de. 900 IN TXT "Hello, how are you?"'
-echo -e server dyn-ns.cloud.dhbw-mannheim.de\nupdate add $RECORD\nsend\n | nsupdate -y "$HMAC"
+echo -e "server cloud-ns.dhbw-mannheim.de\nupdate add $RECORD\nsend\n" | nsupdate -y "$HMAC"
 ```
 
 ## FAQ

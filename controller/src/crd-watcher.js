@@ -1,27 +1,30 @@
 const k8s = require('@kubernetes/client-node');
-const { default: Operator, ResourceEventType } = require('@dot-i/k8s-operator');
+const { default: Operator, ResourceMetaImpl } = require('@dot-i/k8s-operator');
 const EventEmitter = require('events')
 
 module.exports = class CrdWatcher extends Operator {
 
 	constructor(options) {
 		super(options.logger("Operator"));
+		this.log = options.logger("CrdWatcher");
+		this.options = options
 
 		this.crdFile = options.crdFile;
-		this.log = options.logger("CrdWatcher");
 		this.namespace = options.namespace
-
 		this.events = new EventEmitter();
 
-		this.log.debug("constructor: New instance with options: ", options);
+		this.log.debug("constructor: New instance with with crdFile", this.crdFile);
 	}
 
 	async init() {
+		this.log.debug(`init: Registering CRD from file ${this.crdFile}`)
 		const { group, versions, plural } = await this.registerCustomResourceDefinition(this.crdFile);
 		this.customObjectsApi = this.kubeConfig.makeApiClient(k8s.CustomObjectsApi)
 		this.crdGroup = group;
 		this.crdVersions = versions;
 		this.crdPlural = plural;
+
+		this.log = this.options.logger(`CrdWatcher(${plural}`);
 
 		this.log.debug(`init: Watching group ${group}, versions[0].name ${versions[0].name}, plural ${plural}`)
 
@@ -41,48 +44,31 @@ module.exports = class CrdWatcher extends Operator {
 	}
 
 	async updateResourceStatus(cr, status) {
-		//this.log.debug(`updateResourceStatus: Updating status of ${cr.spec.domainName} to `, status)
-
-		//copied from node_modules/@dot-i/k8s-operator/dist/operator.js since it is not exported
-		class ResourceMetaImpl {
-			constructor(id, object) {
-				var _a, _b;
-				if (!((_a = object.metadata) === null || _a === void 0 ? void 0 : _a.name) || !((_b = object.metadata) === null || _b === void 0 ? void 0 : _b.resourceVersion) || !object.apiVersion || !object.kind) {
-					throw Error(`Malformed event object for '${id}'`);
-				}
-				this.id = id;
-				this.name = object.metadata.name;
-				this.namespace = object.metadata.namespace;
-				this.resourceVersion = object.metadata.resourceVersion;
-				this.apiVersion = object.apiVersion;
-				this.kind = object.kind;
-			}
-			static createWithId(id, object) {
-				return new ResourceMetaImpl(id, object);
-			}
-			static createWithPlural(plural, object) {
-				return new ResourceMetaImpl(`${plural}.${object.apiVersion}`, object);
-			}
-		}
+		this.log.debug(`updateResourceStatus: Updating status of ${cr.spec.domainName} to `, status)
 
 		let meta = ResourceMetaImpl.createWithPlural(this.crdPlural, cr);
 
 		return await this.patchResourceStatus(meta, status)
 	}
 
-	async listItems() {
-		//TODO Evaluate _continue: field
+	async *listItems(fieldSelector, labelSelector) {
+		let _continue = undefined;
 
-		const res = await this.customObjectsApi.listNamespacedCustomObject(
-			this.crdGroup,
-			this.crdVersions[0].name,
-			this.namespace, //namespace>
-			this.crdPlural,
-			'false',
-			'', //<labelSelectorExpresson>
-		);
+		do {
+			const response = await this.customObjectsApi
+				.listNamespacedCustomObject(
+					this.crdGroup, this.crdVersions[0].name, this.namespace, this.crdPlural,
+                	/* pretty = */ 'false', /* allowWatchBookmarks = */ false,
+                	/* _continue = */ _continue, /* fieldSelector = */ fieldSelector,
+					/* labelSelector = */ labelSelector
+				)
 
-		return res.body.items
+			for (const item of response.body.items)
+				yield item
+
+			// Check whether we need to fetch more items
+			_continue = response?.body?.metadata?.continue
+		} while (_continue)
 	}
 
 }

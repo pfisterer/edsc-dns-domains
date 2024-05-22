@@ -1,15 +1,15 @@
-const Express = require('express')
+const express = require('express')
 
 module.exports = class HealthEndpoint {
 	constructor(options) {
 		this.logger = options.logger("HealthEndpoint")
-		this.logger.debug("New instance with options: ", options);
+		this.logger.debug("New instance");
 	}
 
 	start(port) {
 		this.logger.info(`Starting health endpoint on port ${port}`)
 
-		this.app = Express();
+		this.app = express();
 
 		this.app.get('/', (req, res) => {
 			res.status(200).send(`

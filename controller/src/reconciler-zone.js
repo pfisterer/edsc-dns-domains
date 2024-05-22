@@ -1,9 +1,8 @@
-const { fixed: { setIntervalAsync: setIntervalAsync }, clearIntervalAsync } = require('set-interval-async')
+const { setIntervalAsync, clearIntervalAsync } = require('set-interval-async');
 const getDifferingFieldNames = require('./util/differing-field-names.js')
 const { ResourceEventType } = require('@dot-i/k8s-operator');
-const { parseDomain } = require('parse-domain')
 
-class ReconcilerData {
+class DnsReconcilerData {
 	constructor(crs, zoneDomainNames, logger) {
 		this.logger = logger
 		this.crs = crs
@@ -46,52 +45,52 @@ class ReconcilerData {
 		return zones
 	}
 
+	getCrForName(name) {
+		return this.crs.filter(el => el.spec.domainName === name)[0]
+	}
+
 	//TODO: check, if this is really required
 	/** Get a Set of upstream zones of the requested domains
 	 * @returns Set of upstream zones (e.g.,  {'b.c.de', 'c.de'})
 	 */
-	getUpstreamDelegationZones() {
+	// getUpstreamDelegationZones() {
 
-		/** Get upstream zones w/o the top level domain for a single domain name
-		 * @param domainName The domain name (e.g., "a.b.c.de")
-		 * @returns Array of upstream zones (e.g., ['b.c.de', 'c.de'])
-		 */
-		function getSuperDomains(domainName) {
-			const split = domainName.split(".")
-			const { topLevelDomains } = parseDomain(domainName)
-			//Remove the top-level domain
-			const d_wo_tld = split.slice(0, split.length - topLevelDomains.length)
-			//Remove the host part (i.e., "a" in above's example)
-			const d_wo_host = d_wo_tld.slice(1)
+	// 	/** Get upstream zones w/o the top level domain for a single domain name
+	// 	 * @param domainName The domain name (e.g., "a.b.c.de")
+	// 	 * @returns Array of upstream zones (e.g., ['b.c.de', 'c.de'])
+	// 	 */
+	// 	function getSuperDomains(domainName) {
+	// 		const split = domainName.split(".")
+	// 		const { topLevelDomains } = parseDomain(domainName)
+	// 		//Remove the top-level domain
+	// 		const d_wo_tld = split.slice(0, split.length - topLevelDomains.length)
+	// 		//Remove the host part (i.e., "a" in above's example)
+	// 		const d_wo_host = d_wo_tld.slice(1)
 
-			let result = []
-			//Generate b.c.de and c.de
-			for (let i = 0; i < d_wo_host.length; ++i) {
-				let r = d_wo_host.slice(i).concat(topLevelDomains)
-				result.push(r.join("."))
-			}
-			return result
-		}
+	// 		let result = []
+	// 		//Generate b.c.de and c.de
+	// 		for (let i = 0; i < d_wo_host.length; ++i) {
+	// 			let r = d_wo_host.slice(i).concat(topLevelDomains)
+	// 			result.push(r.join("."))
+	// 		}
+	// 		return result
+	// 	}
 
-		//Compile a set of upstream zones
-		let result = new Set()
-		for (let domain of this.crDomainNames) {
-			getSuperDomains(domain)
-				.forEach(el => result.add(el))
-		}
-		return result
-	}
-
-	getCrForName(name) {
-		return this.crs.filter(el => el.spec.domainName === name)[0]
-	}
+	// 	//Compile a set of upstream zones
+	// 	let result = new Set()
+	// 	for (let domain of this.crDomainNames) {
+	// 		getSuperDomains(domain)
+	// 			.forEach(el => result.add(el))
+	// 	}
+	// 	return result
+	// }
 }
 
-class Reconciler {
+class DnsZoneReconciler {
 
 	constructor(options) {
 		this.options = options
-		this.crdWatcher = options.crdWatcher
+		this.dnssecZoneWatcher = options.dnssecZoneWatcher
 		this.bindConfigGen = options.bindConfigGen
 		this.bindRestartRequestCallback = options.bindRestartRequestCallback
 		this.logger = options.logger("Reconciler");
@@ -108,9 +107,9 @@ class Reconciler {
 				this.logger.debug(`on:${event.type}: Ignoring invalid event:`, event)
 		}
 
-		this.crdWatcher.events.on(ResourceEventType.Added, eventHandler);
-		this.crdWatcher.events.on(ResourceEventType.Modified, eventHandler);
-		this.crdWatcher.events.on(ResourceEventType.Deleted, eventHandler);
+		this.dnssecZoneWatcher.events.on(ResourceEventType.Added, eventHandler);
+		this.dnssecZoneWatcher.events.on(ResourceEventType.Modified, eventHandler);
+		this.dnssecZoneWatcher.events.on(ResourceEventType.Deleted, eventHandler);
 
 		this.reconcileInterval = options.reconcileInterval;
 		this.setupReconcileTimer(this.reconcileInterval);
@@ -162,8 +161,8 @@ class Reconciler {
 
 			try {
 				this.logger.debug(`add: Patching status of zone: ${cr.spec.domainName}: patch = `, statusPatch)
-				let result = await this.crdWatcher.updateResourceStatus(cr, statusPatch)
-				this.logger.debug(`add: Patching result =`, result)
+				let result = await this.dnssecZoneWatcher.updateResourceStatus(cr, statusPatch)
+				this.logger.debug(`add: Patching result for zone ${cr.spec.domainName}: `, result)
 
 			} catch (e) {
 				this.logger.warn(`add: Error while patching status of custom resource (zone: ${cr.spec.domainName}): `, e)
@@ -202,8 +201,8 @@ class Reconciler {
 		this.logger.debug(`reconcile: Starting`)
 
 		const zones = await this.bindConfigGen.getZones();
-		const customResources = (await this.crdWatcher.listItems())
-		const data = new ReconcilerData(customResources, zones, this.logger)
+		const customResources = (await this.dnssecZoneWatcher.listItems())
+		const data = new DnsReconcilerData(customResources, zones, this.logger)
 
 		// Zones that exist in bind but no matching CR exists in K8s
 		for (const name of data.getDispensableZoneDomainNames()) {
@@ -237,6 +236,26 @@ class Reconciler {
 		this.logger.debug(`reconcile: Done`)
 	}
 
+
+	dummyDnsZoneGenerator() {
+		const name = randomWords(2).join('.')
+		const meta_name = `domain-${name}`
+		return {
+			"apiVersion": "dnsseczone.farberg.de/v1",
+			"kind": "DnssecZone",
+			"metadata": { "name": meta_name },
+			"spec": {
+				"domainName": name,
+				"adminContact": `admin.${name}`,
+				"ttlSeconds": 60,
+				"refreshSeconds": 60,
+				"retrySeconds": 60,
+				"expireSeconds": 60,
+				"minimumSeconds": 60
+			}
+		}
+	}
+
 }
 
-module.exports = { Reconciler, ReconcilerData }
+module.exports = { DnsZoneReconciler, DnsReconcilerData }

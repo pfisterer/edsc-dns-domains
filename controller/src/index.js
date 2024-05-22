@@ -5,7 +5,8 @@ const { program: optionparser } = require('commander')
 
 const CrdWatcher = require('./crd-watcher')
 const BindConfigGen = require("./bind/bind-config-gen")
-const { Reconciler } = require("./reconciler");
+const { DnsZoneReconciler } = require("./reconciler-zone");
+const { DnsUpdateReconciler } = require("./reconciler-dnsupdate");
 const HealthEndpoint = require("./health-endpoint");
 const dummyCrdGen = require('./dummy-crd-gen')
 
@@ -26,9 +27,14 @@ const options = optionparser
   .option('--nameserver2 <name1>', "The 2nd external name of this nameserver", undefined)
   .option('--bind-verbose-output', "Use verbose logging for Bind configuration", false)
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
+  .option('--nsupdatepath <path>', "Path to the nsupdate binary", "/usr/bin/nsupdate")
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
-  .version('0.0.4beta')
+  .option('--run-reconcilers <list>', "Which reconcilers to start", "zone,update")
+  .option('--update-dummy-dnsserver <server>', "The DNS server to use for dummy updates", '1.1.1.1')
+  .option('--update-dummy-tld <tld>', "The TLD to use ", 'example.com')
+  .option('--update-dummy-keystring <tld>', "The key to use", 'xxxxx-invalid-xxxxxxxxx')
+  .version('0.0.5beta')
   .addHelpCommand()
   .parse()
   .opts()
@@ -38,6 +44,7 @@ const options = optionparser
 // ------------------------------------------------
 
 let logLevel = options.verbose ? "debug" : "info";
+let intervalRandomCR = options.debugCreateCrds
 
 function getLogger(name) {
   let log = log4js.getLogger(name);
@@ -53,39 +60,73 @@ async function main(options) {
   const logger = getLogger("main")
   logger.debug(`Starting with options`, options)
 
-  //Create bind config generator
-  const bindConfigGen = new BindConfigGen(Object.assign({}, { logger: getLogger }, options))
+  const reconcilers = options.runReconcilers.split(",").map(r => r.trim())
 
-  //Create custom resource watcher
-  const crdFile = path.join(options.crddef, "dnssec-zone-crd-v1.yaml");
-  const crdWatcher = new CrdWatcher(Object.assign({}, { crdFile, logger: getLogger }, options))
-  await crdWatcher.start();
+  if (reconcilers.includes("zone")) {
+    logger.info("Starting DNS Zone reconciler")
 
-  //Create reconciler
-  const reconciler = new Reconciler(Object.assign({}, {
-    logger: getLogger,
-    crdWatcher,
-    bindConfigGen,
-    bindRestartRequestCallback() {
-      const restartFilename = path.join(options.configdir, "bind-restart.requested");
-      logger.info(`Restarting bind requested, creating file ${restartFilename}`)
-      fs.closeSync(fs.openSync(restartFilename, 'w'));
+    //Create bind config generator
+    const bindConfigGen = new BindConfigGen(Object.assign({}, { logger: getLogger }, options))
+
+    //Create custom resource watcher for dnssec zones
+    const crdFilesDnsssecZone = path.join(options.crddef, "dnssec-zone-crd-v1.yaml");
+    const zoneWatcher = new CrdWatcher(Object.assign({}, { crdFile: crdFilesDnsssecZone, logger: getLogger }, options))
+    await zoneWatcher.start()
+
+    //Create DNS Zone reconciler
+    const zoneReconciler = new DnsZoneReconciler(Object.assign({}, {
+      logger: getLogger,
+      dnssecZoneWatcher: zoneWatcher,
+      bindConfigGen,
+      bindRestartRequestCallback() {
+        const restartFilename = path.join(options.configdir, "bind-restart.requested");
+        logger.info(`Restarting bind requested, creating file ${restartFilename}`)
+        fs.closeSync(fs.openSync(restartFilename, 'w'));
+      }
+    }, options))
+
+    //Create random CRs
+    if (intervalRandomCR > 0) {
+      logger.info("Starting dummy generator")
+
+      dummyCrdGen(zoneWatcher.getCustomObjectsApi(), intervalRandomCR,
+        zoneWatcher.crdGroup, zoneWatcher.crdVersions[0].name,
+        options.namespace, zoneWatcher.crdPlural,
+        zoneReconciler.dummyDnsZoneGenerator,
+        getLogger("dummyCrdGen"))
     }
-  }, options))
+
+  }
+
+  //Create DNS Update reconciler
+  if (reconcilers.includes("update")) {
+    logger.info("Starting DNS Update reconciler")
+
+    //Create custom resource watcher for dnssec updates
+    const crdFilesDnsUpdate = path.join(options.crddef, "dnsupdate-crd-v1.yaml");
+    const updateWatch = new CrdWatcher(Object.assign({}, { crdFile: crdFilesDnsUpdate, logger: getLogger }, options))
+    await updateWatch.start();
+
+    //Create DNS Update reconciler
+    const dnsUpdateReconciler = new DnsUpdateReconciler(Object.assign({}, { logger: getLogger, dnssecUpdateWatcher: updateWatch, }, options))
+    dnsUpdateReconciler.start()
+
+    //Create random CRs
+    if (intervalRandomCR > 0) {
+      logger.info("Starting dummy generator for DNS updates")
+
+      dummyCrdGen(updateWatch.getCustomObjectsApi(), intervalRandomCR,
+        updateWatch.crdGroup, updateWatch.crdVersions[0].name,
+        options.namespace, updateWatch.crdPlural,
+        () => dnsUpdateReconciler.generateRandomDummyResource(),
+        getLogger("dummyDnsUpdateGen"))
+    }
+
+  }
 
   //Start health endpoint
   const healthEndpoint = new HealthEndpoint(Object.assign({}, { logger: getLogger }, options))
   healthEndpoint.start(options.healthendpoint)
-
-  //Create random CRs
-  if (options.debugCreateCrds > 0) {
-    logger.info("Starting dummy generator")
-    let interval = options.debugCreateCrds
-
-    dummyCrdGen(crdWatcher.getCustomObjectsApi(), interval,
-      crdWatcher.crdGroup, crdWatcher.crdVersions[0].name,
-      options.namespace, crdWatcher.crdPlural, getLogger("dummyCrdGen"))
-  }
 }
 
 // ------------------------------------------------
@@ -93,6 +134,5 @@ async function main(options) {
 // ------------------------------------------------
 
 (async () => main(options)
-  .then(() => console.log("Main done"))
   .catch(e => { console.log("Error in main: ", e); process.exit(1) })
 )();

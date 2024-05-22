@@ -230,7 +230,11 @@ module.exports = class BindConfigGen {
 		const filesToDelete = [this.bindKeyFileName(spec), this.bindConfigFileName(spec), this.bindZoneFileName(spec)]
 		for (const f of filesToDelete) {
 			this.logger.debug(`deleteZone: Deleting file for zone ${spec.domainName}`, f)
-			fs.unlinkSync(f);
+			try {
+				fs.unlinkSync(f);
+			} catch (e) {
+				this.logger.debug(`deleteZone: Error deleting file for zone ${spec.domainName}`, f, e)
+			}
 		}
 
 		let { changed } = this.generateNamedConf()

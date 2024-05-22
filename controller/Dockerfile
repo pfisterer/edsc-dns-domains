@@ -1,9 +1,9 @@
-FROM node:16-alpine
+FROM node:22-alpine
 
 LABEL maintainer="Dennis Pfisterer, http://www.dennis-pfisterer.de"
 
-# Install dnssec-keygen
-RUN apk add bind
+# Install dnssec-keygen and nsupdate
+RUN apk add bind bind-tools
 
 # set our node environment, either development or production
 ARG NODE_ENV=production
