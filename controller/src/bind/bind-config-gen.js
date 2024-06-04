@@ -17,7 +17,7 @@ module.exports = class BindConfigGen {
 		this.logger = options.logger("BindConfigGen")
 		this.conditionalUpdateDest = condUpdate(this.logger)
 
-		this.logger.debug("New instance with options: ", options);
+		this.logger.debug("constructor - New instance")
 
 		this.defaultFilePermissions = 0o664
 		this.defaultPathPermissions = 0o755

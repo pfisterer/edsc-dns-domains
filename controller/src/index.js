@@ -16,9 +16,9 @@ const dummyCrdGen = require('./dummy-crd-gen')
 
 const options = optionparser
   .storeOptionsAsProperties(true)
-  .option('-v, --verbose', "Display verbose output", false)
+  .option('--log-level <level>', "Set log level out of: fatal, error, warn, info, debug, trace", "debug")
   .option('--dryrun', "Do not actually run bind", false)
-  .option('--debug-create-crds <interval>', "Create random CRs for debugging", -1)
+  .option('--debug-create-crds <intervalMs>', "Create random CRs for debugging", -1)
   .option('--configdir <path>', "The directory where to write the configuration to", "/tmp")
   .option('--vardir <path>', "The directory where to write the zone files to", "/tmp")
   .option('--crddef <path>', "Path to custom resource defs(CRDs) to use", path.join(__dirname, "./crd-defs"))
@@ -31,11 +31,21 @@ const options = optionparser
   .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
   .option('--run-reconcilers <list>', "Which reconcilers to start", "zone,update")
+
+  //For updating an external upstream DNS server record to match the external IP of the k8s service
+  .option('upstream-dns-server <server>', "The name/address of the upstream DNS server to use", "bama09.dhbw-mannheim.de")
+  .option('upstream-dns-record-name <name>', "The record name to use", "cloud-ns.cloud-ns.dhbw-mannheim.de")
+  .option('upstream-dns-record-type <rrtype>', "The record type to use", "A")
+  .option('--k8s-service-name <name>', "The name of the k8s service to use", "bind-dnssec-config-service")
+
+  //Dummy update options
   .option('--update-dummy-dnsserver <server>', "The DNS server to use for dummy updates", '1.1.1.1')
   .option('--update-dummy-tld <tld>', "The TLD to use ", 'example.com')
   .option('--update-dummy-keystring <tld>', "The key to use", 'xxxxx-invalid-xxxxxxxxx')
-  .version('0.0.5beta')
-  .addHelpCommand()
+
+  //Version and help
+  .version('0.0.7')
+  .helpCommand()
   .parse()
   .opts()
 
@@ -43,7 +53,7 @@ const options = optionparser
 // Set global log level options
 // ------------------------------------------------
 
-let logLevel = options.verbose ? "debug" : "info";
+let logLevel = options.logLevel;
 let intervalRandomCR = options.debugCreateCrds
 
 function getLogger(name) {

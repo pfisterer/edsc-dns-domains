@@ -1,6 +1,8 @@
 const { setIntervalAsync, clearIntervalAsync } = require('set-interval-async');
 const getDifferingFieldNames = require('./util/differing-field-names.js')
 const { ResourceEventType } = require('@dot-i/k8s-operator');
+const randomWords = require('./util/randomwords.js')
+
 
 class DnsReconcilerData {
 	constructor(crs, zoneDomainNames, logger) {
@@ -93,7 +95,7 @@ class DnsZoneReconciler {
 		this.dnssecZoneWatcher = options.dnssecZoneWatcher
 		this.bindConfigGen = options.bindConfigGen
 		this.bindRestartRequestCallback = options.bindRestartRequestCallback
-		this.logger = options.logger("Reconciler");
+		this.logger = options.logger("DnsZoneReconciler");
 
 		this.addQueue = new Map()
 		this.deleteQueue = new Map()
@@ -115,7 +117,7 @@ class DnsZoneReconciler {
 		this.setupReconcileTimer(this.reconcileInterval);
 		this.bindRestartRequested = false
 
-		this.logger.debug("constructor: New instance with options: ", options);
+		this.logger.debug("constructor: New instance");
 	}
 
 	enque(q, cr) {
@@ -198,10 +200,11 @@ class DnsZoneReconciler {
 	}
 
 	async reconcile() {
-		this.logger.debug(`reconcile: Starting`)
+		this.logger.trace(`reconcile: Starting`)
 
 		const zones = await this.bindConfigGen.getZones();
-		const customResources = (await this.dnssecZoneWatcher.listItems())
+
+		const customResources = Array.from(this.dnssecZoneWatcher.listItems())
 		const data = new DnsReconcilerData(customResources, zones, this.logger)
 
 		// Zones that exist in bind but no matching CR exists in K8s
@@ -233,7 +236,7 @@ class DnsZoneReconciler {
 			this.bindRestartRequested = false
 		}
 
-		this.logger.debug(`reconcile: Done`)
+		this.logger.trace(`reconcile: Done`)
 	}
 
 

@@ -21,11 +21,16 @@ spec:
             - "--vardir"
             - "/var/bind/gen"
             - "--nameserver1"
-            - "cloud-ns.dhbw-mannheim.de"
+            - "cloud-ns.cloud-ns.dhbw-mannheim.de"
             # - "--nameserver2"
             # - "cloud-ns.dhbw-mannheim.de"
             - "--bind-verbose-output"
-            - "--verbose"
+            - "--log-level"
+            - "debug"
+            #- "--run-reconcilers"
+            #- "zone"
+            #- "--debug-create-crds"
+            #- "10000"
           volumeMounts:
             - name: config-volume
               mountPath: /etc/bind/
@@ -77,9 +82,11 @@ spec:
     app: bind_dnssec_config
   type: LoadBalancer
   ports:
-    - protocol: UDP
+    - name: dns-udp
+      protocol: UDP
       port: 53
       targetPort: 53
-    - protocol: TCP
+    - name: dns-tcp
+      protocol: TCP
       port: 53
       targetPort: 53

@@ -1,7 +1,8 @@
 const { ResourceEventType } = require('@dot-i/k8s-operator');
 const { spawnSync } = require('child_process');
 const dns = require('dns').promises
-const randomWords = require('./randomwords.js')
+const net = require('node:net')
+const randomWords = require('./util/randomwords.js')
 
 class DnsUpdateReconciler {
 
@@ -33,15 +34,15 @@ class DnsUpdateReconciler {
     }
 
     async reconcile() {
-        this.logger.debug("reconcile: Reconciling all resources")
+        this.logger.trace("reconcile: Reconciling all resources")
         for await (const item of await this.watcher.listItems()) {
-            await this.handle(item, /*existing =*/ true)
+            await this.handle(item, /* existing = */ true)
         }
-        this.logger.debug("reconcile: Done reconciling all resources")
+        this.logger.trace("reconcile: Done reconciling all resources")
     }
 
     async handle(item, existing) {
-        this.logger.debug(`handle: ${existing ? "checking existing" : "deleting"} resource '${item.metadata.name}'`)
+        this.logger.trace(`handle: ${existing ? "checking existing" : "deleting"} resource '${item.metadata.name}'`)
         let nsupdateRequired = false || (existing == false)
 
         if (existing) {
@@ -60,26 +61,36 @@ class DnsUpdateReconciler {
     }
 
     async itemDnsLookupExists(item) {
-        this.logger.debug(`itemDnsLookupExists: Checking DNS lookup for resource '${item.metadata.name}'`)
+        this.logger.trace(`itemDnsLookupExists: Checking DNS lookup for resource '${item.metadata.name}'`)
 
         for (const record of item.spec.records) {
+            this.logger.trace(`itemDnsLookupExists: Checking record ${record.name} of type ${record.recordType} with expected contents ${record.contents}`)
+
             const result = await this.lookupExists(item.spec.dnsserver, record)
+
             if (result) {
-                this.logger.debug(`itemDnsLookupExists: DNS lookup exists for resource '${item.metadata.name}'`)
+                this.logger.trace(`itemDnsLookupExists: DNS lookup correct for resource '${item.metadata.name}'`)
                 return true
             }
         }
 
-        this.logger.debug(`itemDnsLookupExists: DNS lookup does not exist for resource '${item.metadata.name}'`)
+        this.logger.trace(`itemDnsLookupExists: DNS lookup does not exist for resource '${item.metadata.name}'`)
         return false
     }
 
     async lookupExists(dnsServer, record) {
+        let usedDnsServer = dnsServer
+
+        if (!net.isIP(usedDnsServer)) {
+            usedDnsServer = (await dns.resolve4(usedDnsServer))[0]
+            this.logger.trace(`lookupExists: DNS server is not an IP, resolved ${dnsServer} to ${usedDnsServer}`)
+        }
+
         const expected = record.contents
 
-        for (const r of await this.dnsLookup(dnsServer, record.recordType, record.name)) {
+        for (const r of await this.dnsLookup(usedDnsServer, record.recordType, record.name)) {
             if (r.includes(expected)) {
-                this.logger.debug(`lookupExists: Found '${expected}' in ${r} (type: ${record.recordType}) on ${dnsServer} `)
+                this.logger.trace(`lookupExists: Found expected '${expected}' in record '${r}' (type: ${record.recordType}) on dns server ${dnsServer} (${usedDnsServer}) `)
                 return true
             }
         }
