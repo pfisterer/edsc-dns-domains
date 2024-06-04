@@ -11,7 +11,7 @@ NAMED_GROUP="named"
 
 RESTART_REQUEST_FILE=/etc/bind/bind-restart.requested
 RESTART_NOTIFICATION_FILE=/etc/bind/bind-restart.done
-CHECK_INTERVAL="10s"
+CHECK_INTERVAL="5s"
 
 CMD="$NAMED_BINARY $NAMED_OPTS"
 
@@ -27,8 +27,11 @@ fix_fs_permissions() {
 wait_for_config_wo_errors() {
 
 	# Wait until bind config file exists
+	if [[ ! -f "$NAMED_CONFIG_FILE"	]]; then
+		show_banner "Waiting for $NAMED_CONFIG_FILE to exist"
+	fi
+
 	while [[ ! -f "$NAMED_CONFIG_FILE"	]]; do
-		show_banner "Waiting for $NAMED_CONFIG_FILE to exist, next check in $CHECK_INTERVAL"
 		sleep "$CHECK_INTERVAL"
 	done
 
