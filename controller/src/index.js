@@ -28,7 +28,7 @@ const options = optionparser
   .option('--bind-verbose-output', "Use verbose logging for Bind configuration", false)
   .option('--rndcconfgenpath <path>', "Path to the rndc-confgen binary", "/usr/sbin/rndc-confgen")
   .option('--nsupdatepath <path>', "Path to the nsupdate binary", "/usr/bin/nsupdate")
-  .option('--reconcile-interval <ms>', "Reconcile interval in millis", 10000)
+  .option('--reconcile-interval <ms>', "Reconcile interval in millis", 60 * 1000)
   .option('--healthendpoint <port>', "Start a k8s health endpoint on this port", 7777)
   .option('--run-reconcilers <list>', "Which reconcilers to start", "zone,update")
 

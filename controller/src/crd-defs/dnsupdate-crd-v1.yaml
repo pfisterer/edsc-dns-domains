@@ -43,15 +43,30 @@ spec:
                   items:
                     type: object
                     properties:
-                      recordType:
-                        type: string
-                        enum: ["A", "AAAA", "CNAME", "NS", "PTR"]
                       name:
-                        type: string
-                      contents:
                         type: string
                       ttl_seconds:
                         type: integer
+                      record:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            enum: ["A", "AAAA", "CNAME", "NS", "PTR"]
+                          contents:
+                            type: string
+                      service:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                    oneOf:
+                      - properties:
+                        required: ["name", "ttl_seconds", "record"]
+                      - properties:
+                        required: ["name", "ttl_seconds", "service"]
             status:
               type: object
               properties:

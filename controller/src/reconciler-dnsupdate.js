@@ -2,6 +2,7 @@ const { ResourceEventType } = require('@dot-i/k8s-operator');
 const { spawnSync } = require('child_process');
 const dns = require('dns').promises
 const net = require('node:net')
+const k8s = require('@kubernetes/client-node');
 const randomWords = require('./util/randomwords.js')
 
 class DnsUpdateReconciler {
@@ -11,6 +12,11 @@ class DnsUpdateReconciler {
         this.options = options
         this.watcher = options.dnssecUpdateWatcher
         this.nsupdatePath = options.nsupdatepath
+        this.resolver = new dns.Resolver()
+
+        const kc = new k8s.KubeConfig();
+        kc.loadFromDefault();
+        this.k8sApi = kc.makeApiClient(k8s.CoreV1Api);
     }
 
     start() {
@@ -27,7 +33,6 @@ class DnsUpdateReconciler {
     stop() {
         if (this.intervalId) {
             this.logger.debug("stop: Stopping DnsUpdateReconciler reconciler")
-
             clearInterval(this.intervalId)
             this.intervalId = null
         }
@@ -42,97 +47,130 @@ class DnsUpdateReconciler {
     }
 
     async handle(item, existing) {
-        this.logger.trace(`handle: ${existing ? "checking existing" : "deleting"} resource '${item.metadata.name}'`)
-        let nsupdateRequired = false || (existing == false)
+        const action = existing ? "add" : "delete"
+        const updateStrings = []
 
-        if (existing) {
-            const dnsUpToDate = await this.itemDnsLookupExists(item)
-            nsupdateRequired = !dnsUpToDate
-        }
+        this.logger.trace(`handle: Handling item ${item.metadata.name} with action ${action}`)
 
-        if (nsupdateRequired) {
-            const action = existing ? "add" : "delete"
-
-            this.logger.info(`handle: Performing DNS update (action: ${action}) for resource '${item.metadata.name}'`)
-            await this.runNsupdate(item.spec.dnsserver, action, item.spec.records, item.spec.keystring)
-        } else {
-            this.logger.debug(`handle: No action update required for resource '${item.metadata.name}'`)
-        }
-    }
-
-    async itemDnsLookupExists(item) {
-        this.logger.trace(`itemDnsLookupExists: Checking DNS lookup for resource '${item.metadata.name}'`)
-
+        // Check all records in the item
         for (const record of item.spec.records) {
-            this.logger.trace(`itemDnsLookupExists: Checking record ${record.name} of type ${record.recordType} with expected contents ${record.contents}`)
+            // Get expected values (if any)
+            const expected = await this.getExpectedValues(record)
+            if (!expected) {
+                this.logger.warn(`handle: No expected values for record '${record.name}', skipping`)
+                continue
+            }
 
-            const result = await this.lookupExists(item.spec.dnsserver, record)
-
-            if (result) {
-                this.logger.trace(`itemDnsLookupExists: DNS lookup correct for resource '${item.metadata.name}'`)
-                return true
+            // Check if record exists on DNS server
+            if (! await this.lookupMatchesExpected(item.spec.dnsserver, expected)) {
+                // Record doesn't exist, create nsupdate string
+                updateStrings.push(await this.generateNsupdateString(action, record))
             }
         }
 
-        this.logger.trace(`itemDnsLookupExists: DNS lookup does not exist for resource '${item.metadata.name}'`)
-        return false
+        if (updateStrings.length > 0) {
+            // Create input string for nsupdate
+            const inputString = [
+                `server ${item.spec.dnsserver}`,
+                ...updateStrings,
+                `send`
+            ].join("\n")
+
+            // Create nsupdate command and arguments
+            this.runNsupdate(`nsupdate`, ['-y', item.spec.keyString], inputString)
+        }
     }
 
-    async lookupExists(dnsServer, record) {
+    async getExpectedValues(record) {
+        const result = {
+            name: record.name,
+            expected: record.record ?
+                [{ value: record.record.contents, type: record.record.type }]
+                :
+                await this.getServicePublicIps(record.service.name, record.service.namespace)
+        }
+
+        if (result.expected.length == 0) {
+            this.logger.debug(`getExpectedValues: Service ${record.service.name} has no IP address`)
+            return null
+        }
+
+        this.logger.trace(`getExpectedValues: Expected values for record ${record.name}:`, result)
+
+        return result
+    }
+
+    async lookupMatchesExpected(dnsServer, expected) {
+        // Make DNS server an IP address as required by dns.resolve4
         let usedDnsServer = dnsServer
 
         if (!net.isIP(usedDnsServer)) {
             usedDnsServer = (await dns.resolve4(usedDnsServer))[0]
-            this.logger.trace(`lookupExists: DNS server is not an IP, resolved ${dnsServer} to ${usedDnsServer}`)
+            this.logger.trace(`lookupMatchesExpected: DNS server is not an IP, resolved ${dnsServer} to ${usedDnsServer}`)
         }
 
-        const expected = record.contents
-
-        for (const r of await this.dnsLookup(usedDnsServer, record.recordType, record.name)) {
-            if (r.includes(expected)) {
-                this.logger.trace(`lookupExists: Found expected '${expected}' in record '${r}' (type: ${record.recordType}) on dns server ${dnsServer} (${usedDnsServer}) `)
-                return true
+        // Check lookup result
+        let anyMatch = false
+        for (const entry of expected.expected) {
+            const result = await this.dnsLookup(usedDnsServer, entry.type, expected.name)
+            if (result == entry.value) {
+                this.logger.trace(`lookupMatchesExpected: Found expected value '${entry.value}' for name '${expected.name}' (type: ${entry.type}) on dns server ${dnsServer} (${usedDnsServer})`)
+                anyMatch = true
+                break
+            } else {
+                this.logger.trace(`lookupMatchesExpected: Lookup ${result} != expected value '${entry.value}' for name '${expected.name}' (type: ${entry.type}) on dns server ${dnsServer} (${usedDnsServer})`)
             }
+
         }
 
-        this.logger.debug(`lookupExists: Didn't find '${expected} ' in ${record.name}, type: ${record.recordType}) on DNS server ${dnsServer}`)
-        return false
+        this.logger.trace(`lookupMatchesExpected: ${anyMatch ? "Got" : "Didn't find"} a matching DNS entry for name '${expected.name}'`)
+        return anyMatch
     }
 
     async dnsLookup(dnsServer, recordType, name) {
         try {
-            dns.setServers([dnsServer])
-            return await dns.resolve(name, recordType)
+            this.resolver.setServers([dnsServer])
+            const result = await this.resolver.resolve(name, recordType);
+            this.logger.trace(`dnsLookup: Resolved ${name} to rrtype ${recordType}: ${result}`)
+
+            return result
         } catch (err) {
             this.logger.error(`dnsLookup: Unable to resolve ${name} of type ${recordType} on ${dnsServer}: ${err}`)
             return []
         }
     }
 
-    async runNsupdate(dnsServer, action, records, keyString) {
+    async generateNsupdateString(action, record) {
+
+        if (record.service) {
+            const serviceIPs = await this.getServicePublicIps(record.service.name, record.service.namespace)
+
+            return serviceIPs.map(ip => {
+                return [`update ${action} ${record.name} ${record.ttl_seconds} IN ${ip.type} ${ip.value}`]
+            })
+
+        } else if (record.record) {
+            return [`update ${action} ${record.name} ${record.ttl_seconds} IN ${record.record.type} ${record.record.contents}`]
+
+        } else {
+            throw new Error("No record or service found in record")
+        }
+
+    }
+
+    async runNsupdate(cmd, args, inputString) {
         let success = false
         let errorMsg = ""
 
-        // Create input string for nsupdate
-        const inputString = [
-            `server ${dnsServer}`,
-            ...records.map(r => `update ${action} ${r.name} ${r.ttl_seconds} IN ${r.recordType} ${r.contents}`),
-            `send`
-        ].join("\n")
-
-        // Create nsupdate command and arguments
-        const cmd = `nsupdate`
-        const args = ['-y', keyString]
-
         // Run nsupdate and check for success
         if (this.options.dryrun) {
-            this.logger.info(`Dryrun only, would run: ${cmd} ${args.join(" ")} with input:\n${inputString}`)
+            this.logger.info(`Dryrun only, would run: ${cmd} ${args.join(" ")} with input: \n${inputString} `)
             success = true
 
         } else {
-            this.logger.debug(`runNsupdate: Running ${cmd} ${args.join(" ")} with input:\n${inputString}`)
+            this.logger.debug(`runNsupdate: Running ${cmd} ${args.join(" ")} with input: \n${inputString} `)
             const { status, stdout, stderr } = spawnSync(cmd, args, { input: inputString })
-            this.logger.debug(`runNsupdate: exited with status ${status} and output:\n${stdout}\n${stderr}`)
+            this.logger.debug(`runNsupdate: exited with status ${status} and output: \n${stdout} \n${stderr} `)
 
             success = (status === 0)
             errorMsg = stderr
@@ -141,6 +179,22 @@ class DnsUpdateReconciler {
         return { success, errorMsg }
     }
 
+    async getServicePublicIps(name, namespace) {
+        this.logger.trace(`getServicePublicIps: Looking up public IP for service ${name} in namespace ${namespace} `)
+
+        const service = await this.k8sApi.readNamespacedService(name, namespace)
+
+        let ipList = service?.body?.status?.loadBalancer?.ingress?.map(
+            ingress => {
+                return {
+                    value: ingress.ip,
+                    type: ingress.ip.includes('.') ? 'A' : 'AAAA'
+                }
+            }) ?? []
+
+        this.logger.debug(`getServicePublicIps: Service ${namespace}/${name} has IPs:`, ipList)
+        return ipList
+    }
 
     generateRandomDummyResource() {
         const dnsServer = this.options.updateDummyDnsserver
@@ -163,8 +217,11 @@ class DnsUpdateReconciler {
                 "records": [
                     {
                         "name": domain,
-                        "recordType": "A",
-                        "contents": dummyIp
+                        "ttl_seconds": 60,
+                        "record": {
+                            "recordType": "A",
+                            "contents": dummyIp
+                        }
                     }
                 ]
 
