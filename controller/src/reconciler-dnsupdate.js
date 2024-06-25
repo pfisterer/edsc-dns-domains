@@ -64,7 +64,7 @@ class DnsUpdateReconciler {
             // Check if record exists on DNS server
             if (! await this.lookupMatchesExpected(item.spec.dnsserver, expected)) {
                 // Record doesn't exist, create nsupdate string
-                updateStrings.push(await this.generateNsupdateString(action, record))
+                updateStrings.push(...(await this.generateNsupdateString(action, record)))
             }
         }
 
@@ -72,9 +72,13 @@ class DnsUpdateReconciler {
             // Create input string for nsupdate
             const inputString = [
                 `server ${item.spec.dnsserver}`,
+                ``,
                 ...updateStrings,
                 `send`
             ].join("\n")
+
+            this.logger.trace(`handle: updateStrings for nsupdate: \n`, updateStrings)
+            this.logger.trace(`handle: Input string for nsupdate: \n`, inputString)
 
             // Create nsupdate command and arguments
             this.runNsupdate(`nsupdate`, ['-y', item.spec.keyString], inputString)
@@ -142,15 +146,28 @@ class DnsUpdateReconciler {
 
     async generateNsupdateString(action, record) {
 
-        if (record.service) {
-            const serviceIPs = await this.getServicePublicIps(record.service.name, record.service.namespace)
+        function toUpdateString(action, name, ttl_seconds, type, value) {
+            const result = [
+                `; -----------------------------------------------------------`,
+                `; Handling record for ${name} with type ${type} and value ${value}`,
+            ]
 
-            return serviceIPs.map(ip => {
-                return [`update ${action} ${record.name} ${record.ttl_seconds} IN ${ip.type} ${ip.value}`]
-            })
+            if (action === "add") {
+                result.push(`update delete ${name} ${type}`)
+            }
+
+            result.push(`update ${action} ${name} ${ttl_seconds} IN ${type} ${value}`)
+            result.push(``)
+
+            return result
+        }
+
+        if (record.service) {
+            return (await this.getServicePublicIps(record.service.name, record.service.namespace))
+                .flatMap(ip => toUpdateString(action, record.name, record.ttl_seconds, ip.type, ip.value))
 
         } else if (record.record) {
-            return [`update ${action} ${record.name} ${record.ttl_seconds} IN ${record.record.type} ${record.record.contents}`]
+            return toUpdateString(action, record.name, record.ttl_seconds, record.record.type, record.record.contents)
 
         } else {
             throw new Error("No record or service found in record")
@@ -164,11 +181,11 @@ class DnsUpdateReconciler {
 
         // Run nsupdate and check for success
         if (this.options.dryrun) {
-            this.logger.info(`Dryrun only, would run: ${cmd} ${args.join(" ")} with input: \n${inputString} `)
+            this.logger.info(`Dryrun only, would run: ${cmd} ${args.join(" ")} with input: \n`, inputString)
             success = true
 
         } else {
-            this.logger.debug(`runNsupdate: Running ${cmd} ${args.join(" ")} with input: \n${inputString} `)
+            this.logger.debug(`runNsupdate: Running ${cmd} ${args.join(" ")} with input: \n `, inputString)
             const { status, stdout, stderr } = spawnSync(cmd, args, { input: inputString })
             this.logger.debug(`runNsupdate: exited with status ${status} and output: \n${stdout} \n${stderr} `)
 
