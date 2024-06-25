@@ -1,12 +1,45 @@
 # Bind9 Config Creator for Kubernetes' external-dns
 
-This project allows to reconfigure a [Bind9](https://www.isc.org/bind/) DNS server running in [Kubernetes](https://kubernetes.io/) dynamically using [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). 
-
-Using Kubernetes, [external-dns](https://github.com/kubernetes-sigs/external-dns) can be used to configure external DNS servers for Kubernetes Ingresses and Services. It supports, amongst many others, "Dynamic Updates in the Domain Name System" (DNS UPDATE, cf. [RFC 2136](https://tools.ietf.org/html/rfc2136)). Bind9 is able to provide a RFC 2136 DNS server that allows external-dns to update a certain DNS zone automatically. However, manually editing Bind9 config files for many users quickly becomes tedious. This is where this project supports you. 
+This project allows to reconfigure a [Bind9](https://www.isc.org/bind/) DNS server running in [Kubernetes](https://kubernetes.io/) dynamically using [Custom Resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). It watches custom resources of type `DnssecZone` and updates a Bind9 configuration accordingly. In addition, it watches custom resources of type `DnsUpdate` and updates a remote DNS server using [RFC 2136](https://tools.ietf.org/html/rfc2136). This allows to provide a dynamically deployed DNS server to be used for a certain zone. 
 
 This project supports configuring (and running) a Bind9 server by adding/removing/modifying custom resources in Kubernetes. It creates the required configuration files and key material and attaches this information to the status of the individual custom resources.
 
-## Example 
+## Update a Remote DNS Server Using [RFC2136](https://datatracker.ietf.org/doc/html/rfc2136)
+
+Create a YAML file (e.g., `filename.yaml`) that defines a zone and apply it using `kubectl apply -f filename.yaml`:
+
+```yaml
+apiVersion: dnsseczone.farberg.de/v1
+kind: DnsUpdate
+metadata:
+  name: dnsupdate-test
+spec:
+  # The DNS server to update (using RFC 2136). IP address or hostname.
+  dnsserver: bama9.dhbw-mannheim.de.
+  # The key to use for the update. Format: hmac-type:keyname:key
+  keystring: hmac-sha256:the-name-of-the-key:83c7cad3e61894d88595635f4f5846ede60513f31d751f545607bebf967b7fcb
+  # The records to create
+  records:
+    # Example for a fully specified record (i.e., name and contents)
+    - name: name-of-the-1st-record.cloud.dhbw-mannheim.de.
+      # Time-to-live in seconds
+      ttl_seconds: 60
+      # The type and contents of the record
+      record:
+        type: A
+        contents: 141.111.222.111
+    # Example for a records that reads its contents from a Kubernetes service
+    - name: name-of-the-2nd-record.cloud.dhbw-mannheim.de.
+      # Time-to-live in seconds
+      ttl_seconds: 60
+      # Namespace and name of the service in Kubernetes
+      service:
+        namespace: "default"
+        name: "bind-dnssec-config-service"
+```
+
+### Define a Zone in the DNS server
+
 Define a zone (`someusername.user.cloud.dhbw-mannheim.de`) and apply it using `kubectl apply -f filename.yaml`:
 
 ```yaml
@@ -66,7 +99,7 @@ kubectl apply -f test/example-record.yaml # Add a custom resource
 
 ### Develop using [Skaffold](https://skaffold.dev/)
 
-Make sure kubernetes is running and available and then run `skaffold dev`
+Make sure Kubernetes is running and available and then run `skaffold dev`
 
 ### Deploy to Kubernetes
 
